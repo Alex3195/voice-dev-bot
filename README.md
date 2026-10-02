@@ -16,20 +16,20 @@ To'liq g'oya va bosqichlar: [CLAUDE.md](CLAUDE.md).
   (ELT imzo, Klaes, PVX) to'g'ri yoziladi.
 - Har foydalanuvchining nutq tili (`/lang`): masalan, qoraqalpoqcha gapiradigan uchun `kk`.
 
-### Buyruqlar
+### Boshqaruv — tugmalar bilan
 
-| Buyruq | Nima qiladi |
-| --- | --- |
-| `/help` | Yordam va hozirgi til |
-| `/addproject <nom>` | Yangi project (darhol faol bo'ladi) |
-| `/project` | Projectlar ro'yxati (▶ — faol) |
-| `/project <nom>` | Faol projectni tanlash |
-| `/glossary` | Faol project lug'ati |
-| `/glossary add <atama>, <atama>` | Atama qo'shish (vergul bilan) |
-| `/glossary remove <atama>` | Atamani o'chirish |
-| `/lang` / `/lang <kod>` | Nutq tilini ko'rish / o'zgartirish (`uz`, `kk`, `ru`...) |
+`/start` bosh menyuni ochadi: **📁 Projectlar · 📖 Lug'at · 🌐 Til · ❓ Yordam**. Tugma bosilganda o'sha
+xabar o'zi yangilanadi (chat to'lib ketmaydi).
 
-Whitelist'dan tashqaridagi user'ga bot hech qanday buyruqqa javob bermaydi.
+- **📁 Projectlar** — project'ni bosib faol qilasiz (✅), **➕ Yangi project** — nomini yozasiz.
+- **📖 Lug'at** — **➕ Qo'shish** (atamalarni vergul bilan yozasiz), **➖ O'chirish** (❌ atamani bosasiz).
+- **🌐 Til** — 🇺🇿 O'zbek, 🇰🇿 Qozoq / Qoraqalpoq, 🇷🇺 Rus, 🇬🇧 Ingliz, 🇹🇷 Turk.
+- Har transkript ostida faol project va til ko'rinadi, **📁 Projectni almashtirish** tugmasi bilan.
+
+Buyruqlar ham ishlaydi (Telegram "Menu"da ko'rinadi): `/start`, `/project [nom]`, `/addproject [nom]`,
+`/glossary [add|remove a, b]`, `/lang [kod]`, `/help`.
+
+Whitelist'dan tashqaridagi user'ga bot hech qanday buyruq yoki tugmaga javob bermaydi.
 
 ## Talablar
 

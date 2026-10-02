@@ -8,6 +8,7 @@ import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 

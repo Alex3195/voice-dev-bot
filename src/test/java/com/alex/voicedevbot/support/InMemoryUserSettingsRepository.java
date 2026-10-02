@@ -1,4 +1,4 @@
-package com.alex.voicedevbot.application.service;
+package com.alex.voicedevbot.support;
 
 import com.alex.voicedevbot.application.port.out.UserSettingsRepository;
 import com.alex.voicedevbot.domain.TelegramUserId;
@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-class InMemoryUserSettingsRepository implements UserSettingsRepository {
+public class InMemoryUserSettingsRepository implements UserSettingsRepository {
 
   private final Map<TelegramUserId, UserSettings> settings = new HashMap<>();
 

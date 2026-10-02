@@ -1,4 +1,4 @@
-package com.alex.voicedevbot.application.service;
+package com.alex.voicedevbot.support;
 
 import com.alex.voicedevbot.application.port.out.ProjectRepository;
 import com.alex.voicedevbot.domain.Project;
@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /** {@link ProjectRepository} shartnomasini xotirada bajaradi: nom katta-kichik harfga qaramaydi. */
-class InMemoryProjectRepository implements ProjectRepository {
+public class InMemoryProjectRepository implements ProjectRepository {
 
   private final Map<String, Project> projects = new HashMap<>();
 

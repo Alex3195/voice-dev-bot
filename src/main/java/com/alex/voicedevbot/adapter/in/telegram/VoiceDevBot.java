@@ -12,27 +12,30 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.telegram.telegrambots.longpolling.util.DefaultLongPollingUpdateConsumer;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 /**
- * Telegram update'larini qabul qilib, audio bor xabarlarni (voice, audio, video, fayl) use-case'ga
- * uzatadi.
+ * Telegram update'larini qabul qiladi: audio (voice, fayl, video) → use-case, matn va inline
+ * tugmalar → {@link BotConversation}. Ekranlarni Telegram xabariga o'giradi.
  */
 public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
 
-  /** Telegram HTML; {@code %s} — escape qilingan transkript. */
-  static final String TRANSCRIBED_REPLY = "📝 <b>Matn</b>\n\n%s";
-
   static final String FAILURE_REPLY = "⚠️ Ovozni qayta ishlab bo'lmadi, qaytadan urinib ko'ring.";
   static final String COMMAND_FAILURE_REPLY =
-      "⚠️ Buyruqni bajarib bo'lmadi, keyinroq urinib ko'ring.";
+      "⚠️ Amalni bajarib bo'lmadi, keyinroq urinib ko'ring.";
   static final String TOO_LARGE_REPLY =
       "⚠️ Fayl juda katta (%d MB). Telegram bot %d MB gacha faylni yuklab ola oladi.";
 
@@ -41,40 +44,82 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
   private static final Logger log = LoggerFactory.getLogger(VoiceDevBot.class);
 
   private final HandleVoiceMessageUseCase handleVoiceMessage;
-  private final TelegramCommands commands;
+  private final BotConversation conversation;
   private final TelegramClient telegramClient;
 
   public VoiceDevBot(
       HandleVoiceMessageUseCase handleVoiceMessage,
-      TelegramCommands commands,
+      BotConversation conversation,
       TelegramClient telegramClient) {
     this.handleVoiceMessage = Objects.requireNonNull(handleVoiceMessage, "handleVoiceMessage");
-    this.commands = Objects.requireNonNull(commands, "commands");
+    this.conversation = Objects.requireNonNull(conversation, "conversation");
     this.telegramClient = Objects.requireNonNull(telegramClient, "telegramClient");
   }
 
   @Override
   public void consume(Update update) {
+    if (update.hasCallbackQuery()) {
+      handleButton(update.getCallbackQuery());
+      return;
+    }
     if (!update.hasMessage() || update.getMessage().getFrom() == null) {
       return;
     }
     Message message = update.getMessage();
-    if (TelegramCommands.isCommand(message.getText())) {
-      handleCommand(message);
+    if (message.getText() != null) {
+      handleText(message);
       return;
     }
-    IncomingAudio.from(message).ifPresent(audio -> handle(message, audio));
+    IncomingAudio.from(message).ifPresent(audio -> handleAudio(message, audio));
   }
 
-  private void handleCommand(Message message) {
+  /**
+   * Buyruqlarni Telegram menyusiga ("/" bosilganda) chiqaradi. Muvaffaqiyatsiz bo'lsa bot ishlashda
+   * davom etadi — menyu faqat qulaylik.
+   */
+  public void publishCommandMenu() {
+    List<BotCommand> commands =
+        BotConversation.MENU.stream()
+            .map(item -> new BotCommand(item.command(), item.description()))
+            .toList();
+    try {
+      telegramClient.execute(new SetMyCommands(commands));
+    } catch (TelegramApiException e) {
+      log.warn("Failed to publish command menu", e);
+    }
+  }
+
+  private void handleText(Message message) {
     TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
     try {
-      commands
-          .handle(sender, message.getText())
-          .ifPresent(text -> reply(message.getChatId(), text));
+      conversation
+          .onText(sender, message.getText())
+          .ifPresent(screen -> send(message.getChatId(), screen));
     } catch (StorageException e) {
-      log.error("Failed to handle command in chat {}", message.getChatId(), e);
-      reply(message.getChatId(), COMMAND_FAILURE_REPLY);
+      log.error("Failed to handle text message in chat {}", message.getChatId(), e);
+      send(message.getChatId(), Screen.text(COMMAND_FAILURE_REPLY));
+    }
+  }
+
+  private void handleButton(CallbackQuery query) {
+    TelegramUserId sender = new TelegramUserId(query.getFrom().getId());
+    Long chatId = query.getMessage().getChatId();
+    try {
+      conversation
+          .onButton(sender, query.getData())
+          .ifPresentOrElse(
+              reply -> {
+                answer(query.getId(), reply.toast());
+                if (reply.asNewMessage()) {
+                  send(chatId, reply.screen());
+                } else {
+                  edit(chatId, query.getMessage().getMessageId(), reply.screen());
+                }
+              },
+              () -> answer(query.getId(), ""));
+    } catch (StorageException e) {
+      log.error("Failed to handle button in chat {}", chatId, e);
+      answer(query.getId(), COMMAND_FAILURE_REPLY);
     }
   }
 
@@ -82,18 +127,18 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
    * Hajm limiti bu yerda emas, xatodan keyin tekshiriladi: whitelist tekshiruvidan oldin javob
    * berish begona user'ga bot borligini bildirib qo'yadi.
    */
-  private void handle(Message message, IncomingAudio audio) {
+  private void handleAudio(Message message, IncomingAudio audio) {
     TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
     try {
       switch (handleVoiceMessage.handle(new VoiceMessage(sender, audio.ref()))) {
         case VoiceHandlingResult.Transcribed(var transcript) ->
-            reply(message.getChatId(), TRANSCRIBED_REPLY.formatted(Html.escape(transcript.text())));
+            send(message.getChatId(), conversation.transcript(sender, transcript.text()));
         case VoiceHandlingResult.AccessDenied() ->
             log.warn("Ignoring audio message from non-whitelisted user {}", sender.value());
       }
     } catch (AudioUnavailableException | TranscriptionException | StorageException e) {
       log.error("Failed to handle audio message in chat {}", message.getChatId(), e);
-      reply(message.getChatId(), failureReply(audio));
+      send(message.getChatId(), Screen.text(failureReply(audio)));
     }
   }
 
@@ -105,27 +150,15 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
         audio.sizeBytes() / BYTES_IN_MB, IncomingAudio.MAX_DOWNLOAD_BYTES / BYTES_IN_MB);
   }
 
-  /**
-   * Buyruqlarni Telegram menyusiga ("/" bosilganda) chiqaradi. Muvaffaqiyatsiz bo'lsa bot ishlashda
-   * davom etadi — menyu faqat qulaylik.
-   */
-  public void publishCommandMenu() {
-    List<BotCommand> commands =
-        TelegramCommands.MENU.stream()
-            .map(item -> new BotCommand(item.command(), item.description()))
-            .toList();
-    try {
-      telegramClient.execute(new SetMyCommands(commands));
-    } catch (TelegramApiException e) {
-      log.warn("Failed to publish command menu", e);
-    }
-  }
-
-  /** HTML teglari faqat qisqa sarlavhalarda — bo'laklash so'z chegarasidan ularni buzmaydi. */
-  private void reply(Long chatId, String text) {
-    for (String chunk : MessageChunks.split(text, MessageChunks.MAX_MESSAGE_LENGTH)) {
-      SendMessage message = new SendMessage(chatId.toString(), chunk);
+  /** Uzun matn bo'laklanadi, tugmalar oxirgi bo'lak ostida. */
+  private void send(Long chatId, Screen screen) {
+    List<String> chunks = MessageChunks.split(screen.html(), MessageChunks.MAX_MESSAGE_LENGTH);
+    for (int i = 0; i < chunks.size(); i++) {
+      SendMessage message = new SendMessage(chatId.toString(), chunks.get(i));
       message.setParseMode(ParseMode.HTML);
+      if (i == chunks.size() - 1 && !screen.rows().isEmpty()) {
+        message.setReplyMarkup(keyboardOf(screen));
+      }
       try {
         telegramClient.execute(message);
       } catch (TelegramApiException e) {
@@ -133,5 +166,52 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
         return;
       }
     }
+  }
+
+  private void edit(Long chatId, Integer messageId, Screen screen) {
+    EditMessageText edit =
+        EditMessageText.builder()
+            .chatId(chatId)
+            .messageId(messageId)
+            .text(screen.html())
+            .parseMode(ParseMode.HTML)
+            .replyMarkup(keyboardOf(screen))
+            .build();
+    try {
+      telegramClient.execute(edit);
+    } catch (TelegramApiException e) {
+      // Masalan, "message is not modified" — tugma ikki marta bosilganda
+      log.debug("Failed to edit message {} in chat {}", messageId, chatId, e);
+    }
+  }
+
+  private void answer(String callbackId, String toast) {
+    AnswerCallbackQuery answer = new AnswerCallbackQuery(callbackId);
+    if (!toast.isEmpty()) {
+      answer.setText(toast);
+    }
+    try {
+      telegramClient.execute(answer);
+    } catch (TelegramApiException e) {
+      log.debug("Failed to answer callback {}", callbackId, e);
+    }
+  }
+
+  private static InlineKeyboardMarkup keyboardOf(Screen screen) {
+    List<InlineKeyboardRow> rows =
+        screen.rows().stream()
+            .map(
+                row ->
+                    new InlineKeyboardRow(
+                        row.stream()
+                            .map(
+                                button ->
+                                    InlineKeyboardButton.builder()
+                                        .text(button.label())
+                                        .callbackData(button.action())
+                                        .build())
+                            .toList()))
+            .toList();
+    return new InlineKeyboardMarkup(rows);
   }
 }

@@ -78,7 +78,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 
 ## Holat
 - 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT — `WhisperCppSpeechToText` (whisper.cpp server); `STT_ENGINE=stub` bilan Whisper'siz ishlatish mumkin. Voice, audio fayl, video, video xabar qabul qilinadi (20 MB gacha).
-- Projectlar, lug'at va foydalanuvchi tili — PostgreSQL (`compose.yaml`, port 5433), Flyway, oddiy JDBC (Spring faqat `config`da). Telegram buyruqlari: `/addproject`, `/project`, `/glossary`, `/lang`, `/help`.
+- Projectlar, lug'at va foydalanuvchi tili — PostgreSQL (`compose.yaml`, port 5433), Flyway, oddiy JDBC (Spring faqat `config`da). Boshqaruv inline tugmalar bilan (`BotConversation` + `BotScreens`), buyruqlar qisqa yo'l sifatida: `/start`, `/project`, `/addproject`, `/glossary`, `/lang`, `/help`.
 - Keyingi: transkripsiya jurnali (audio diskda + xom matn; keyin Claude tuzatgan va tasdiqlangan matn — lug'at takliflari, sozlamalarni o'lchash va Whisper fine-tuning dataset uchun) → `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
 - Ma'lum muammo: TelegramBots 10.3 `downloadFileAsStream` API manzilini e'tiborsiz qoldiradi va HTTP statusni tekshirmaydi — shuning uchun `TelegramAudioSource` faylni `java.net.http.HttpClient` bilan o'zi yuklaydi.
 - Claude GitHub App'iga bu private repo uchun yozish ruxsati berilmagan (push rad etilgan); kod IntelliJ/VS Code'da lokal yoziladi va o'zingiz push qilasiz yoki ruxsat berasiz.
