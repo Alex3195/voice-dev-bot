@@ -1,11 +1,14 @@
 package com.alex.voicedevbot.support;
 
+import com.alex.voicedevbot.application.service.Integrations;
 import com.alex.voicedevbot.domain.AccessToken;
 import com.alex.voicedevbot.domain.Namespace;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Set;
 
 /** GitLab testlari uchun umumiy qiymatlar. */
@@ -21,6 +24,11 @@ public final class GitLabFixtures {
   public static final Namespace PERSONAL = new Namespace(7, "alex", true);
 
   private GitLabFixtures() {}
+
+  /** Faqat GitLab ulangan bot: kod va tasklar — shu soxta xizmat. */
+  public static Integrations integrations(CodeHostAndTracker gitLab) {
+    return new Integrations(Map.of(Provider.GITLAB, gitLab), Map.of(Provider.GITLAB, gitLab));
+  }
 
   public static TokenInfo expiringOn(LocalDate date) {
     return TokenInfo.expiring("alex", Set.of("api"), date);

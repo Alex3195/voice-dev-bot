@@ -2,7 +2,6 @@ package com.alex.voicedevbot.application.service;
 
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TasksResult;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
@@ -20,15 +19,13 @@ public class ManageTasksService implements ManageTasksUseCase {
   /** Bitta ro'yxatda nechta task. */
   public static final int PAGE_SIZE = 8;
 
-  /** GitLab'dan o'qiladigan issue'lar chegarasi (eng yangilari). */
+  /** Xizmatdan o'qiladigan issue'lar chegarasi (eng yangilari). */
   public static final int ISSUE_LIMIT = 300;
 
   private final ProjectRepoAccess access;
-  private final CodeHost gitLab;
 
-  public ManageTasksService(ProjectRepoAccess access, CodeHost gitLab) {
+  public ManageTasksService(ProjectRepoAccess access) {
     this.access = Objects.requireNonNull(access, "access");
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
   }
 
   @Override
@@ -65,7 +62,8 @@ public class ManageTasksService implements ManageTasksUseCase {
 
   @Override
   public TasksResult open(TelegramUserId user, long iid) {
-    return run(user, repo -> opened(repo, gitLab.issue(repo.connection(), repo.repoId(), iid)));
+    return run(
+        user, repo -> opened(repo, repo.tracker().issue(repo.connection(), repo.repoId(), iid)));
   }
 
   @Override
@@ -76,15 +74,16 @@ public class ManageTasksService implements ManageTasksUseCase {
         repo ->
             new TasksResult.Created(
                 repo.project(),
-                gitLab.createIssue(
-                    repo.connection(), repo.repoId(), task, List.of(AI_TASK_LABEL))));
+                repo.tracker()
+                    .createIssue(repo.connection(), repo.repoId(), task, List.of(AI_TASK_LABEL))));
   }
 
   @Override
   public TasksResult setOpen(TelegramUserId user, long iid, boolean open) {
     return run(
         user,
-        repo -> opened(repo, gitLab.setIssueOpen(repo.connection(), repo.repoId(), iid, open)));
+        repo ->
+            opened(repo, repo.tracker().setIssueOpen(repo.connection(), repo.repoId(), iid, open)));
   }
 
   private TasksResult opened(ProjectRepoAccess.Ready repo, Task task) {
@@ -92,14 +91,14 @@ public class ManageTasksService implements ManageTasksUseCase {
         repo.project(),
         task,
         task.status(repo.today()),
-        gitLab.mergeRequests(repo.connection(), repo.repoId(), task.iid()));
+        repo.code().mergeRequests(repo.connection(), repo.repoId(), task.iid()));
   }
 
   private List<Task> issues(ProjectRepoAccess.Ready repo) {
-    return gitLab.issues(repo.connection(), repo.repoId(), ISSUE_LIMIT);
+    return repo.tracker().issues(repo.connection(), repo.repoId(), ISSUE_LIMIT);
   }
 
-  /** Muddati o'tganlar — eng eskisi birinchi; qolganlari GitLab tartibida (eng yangisi). */
+  /** Muddati o'tganlar — eng eskisi birinchi; qolganlari xizmat tartibida (eng yangisi). */
   private static Comparator<Task> order(TaskStatus status) {
     return status == TaskStatus.OVERDUE
         ? Comparator.comparing(task -> task.dueDate().orElse(LocalDate.MAX))

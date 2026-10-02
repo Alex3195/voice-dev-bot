@@ -22,6 +22,7 @@ import com.alex.voicedevbot.domain.AccessToken;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.Namespace;
 import com.alex.voicedevbot.domain.NewTask;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.ServerAddress;
@@ -67,7 +68,8 @@ class GitLabHttpApiIntegrationTest {
   void setUp() {
     address = ServerAddress.parse(gitLab.baseUrl());
     connection =
-        new ProviderConnection(1, address, TOKEN, TokenInfo.withoutExpiry("alex", Set.of("api")));
+        new ProviderConnection(
+            1, Provider.GITLAB, address, TOKEN, TokenInfo.withoutExpiry("alex", Set.of("api")));
   }
 
   @Test
@@ -209,6 +211,7 @@ class GitLabHttpApiIntegrationTest {
     ProviderConnection unreachable =
         new ProviderConnection(
             1,
+            Provider.GITLAB,
             ServerAddress.parse("http://127.0.0.1:1"),
             TOKEN,
             TokenInfo.withoutExpiry("alex", Set.of("api")));
@@ -382,5 +385,11 @@ class GitLabHttpApiIntegrationTest {
     assertThatThrownBy(() -> api.files(connection, 42, "", false))
         .isInstanceOfSatisfying(
             IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAUTHORIZED));
+  }
+
+  @Test
+  void should_build_api_url_under_server_path() {
+    assertThat(GitLabHttpApi.api(ServerAddress.parse("http://10.0.0.5/gitlab"), "/user"))
+        .isEqualTo(URI.create("http://10.0.0.5/gitlab/api/v4/user"));
   }
 }

@@ -12,10 +12,10 @@ import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
 import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TokenExpiryAlertsUseCase;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.port.out.ConnectionRepository;
 import com.alex.voicedevbot.application.port.out.ProjectRepoLinks;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
+import com.alex.voicedevbot.application.service.Integrations;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
@@ -23,10 +23,12 @@ import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.TokenExpiryAlertsService;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +40,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** GitLab ulanishlari, project ↔ repo, tasklar, hujjatlar va tokenlar muddatini kuzatish. */
+/** Xizmatlarga ulanishlar, project ↔ repo, tasklar, hujjatlar va tokenlar muddatini kuzatish. */
 @Configuration
 @EnableConfigurationProperties(SecretsProperties.class)
 class ConnectionsConfig {
@@ -60,7 +62,7 @@ class ConnectionsConfig {
   }
 
   @Bean
-  ConnectionRepository gitLabConnectionRepository(DataSource dataSource, TokenCipher cipher) {
+  ConnectionRepository connectionRepository(DataSource dataSource, TokenCipher cipher) {
     return new JdbcConnectionRepository(dataSource, cipher);
   }
 
@@ -69,20 +71,25 @@ class ConnectionsConfig {
     return new JdbcProjectRepoLinks(dataSource);
   }
 
+  /** Har xizmat adapteri shu yerda ro'yxatga olinadi; GitHub — roadmap → PR H. */
   @Bean
-  CodeHost gitLabApi() {
+  Integrations integrations() {
     HttpClient httpClient =
         HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
-    return new GitLabHttpApi(httpClient, REQUEST_TIMEOUT);
+    GitLabHttpApi gitLab = new GitLabHttpApi(httpClient, REQUEST_TIMEOUT);
+    return new Integrations(Map.of(Provider.GITLAB, gitLab), Map.of(Provider.GITLAB, gitLab));
   }
 
   @Bean
-  ManageConnectionsUseCase manageGitLabUseCase(
-      AccessPolicy accessPolicy, ConnectionRepository connections, CodeHost api, Clock clock) {
-    return new ManageConnectionsService(accessPolicy, connections, api, clock);
+  ManageConnectionsUseCase manageConnectionsUseCase(
+      AccessPolicy accessPolicy,
+      ConnectionRepository connections,
+      Integrations integrations,
+      Clock clock) {
+    return new ManageConnectionsService(accessPolicy, connections, integrations, clock);
   }
 
   @Bean
@@ -91,10 +98,16 @@ class ConnectionsConfig {
       UserSettingsLookup settings,
       ConnectionRepository connections,
       ProjectRepoLinks links,
-      CodeHost api,
+      Integrations integrations,
       Clock clock) {
     return new LinkRepoService(
-        accessPolicy, settings, connections, links, api, new ClasspathRepoTemplate(), clock);
+        accessPolicy,
+        settings,
+        connections,
+        links,
+        integrations,
+        new ClasspathRepoTemplate(),
+        clock);
   }
 
   @Bean
@@ -103,18 +116,19 @@ class ConnectionsConfig {
       UserSettingsLookup settings,
       ConnectionRepository connections,
       ProjectRepoLinks links,
+      Integrations integrations,
       Clock clock) {
-    return new ProjectRepoAccess(accessPolicy, settings, connections, links, clock);
+    return new ProjectRepoAccess(accessPolicy, settings, connections, links, integrations, clock);
   }
 
   @Bean
-  ManageTasksUseCase manageTasksUseCase(ProjectRepoAccess access, CodeHost api) {
-    return new ManageTasksService(access, api);
+  ManageTasksUseCase manageTasksUseCase(ProjectRepoAccess access) {
+    return new ManageTasksService(access);
   }
 
   @Bean
-  BrowseDocsUseCase browseDocsUseCase(ProjectRepoAccess access, CodeHost api) {
-    return new BrowseDocsService(access, api);
+  BrowseDocsUseCase browseDocsUseCase(ProjectRepoAccess access) {
+    return new BrowseDocsService(access);
   }
 
   @Bean

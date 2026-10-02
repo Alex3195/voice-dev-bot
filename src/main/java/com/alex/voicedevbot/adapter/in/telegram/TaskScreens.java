@@ -14,10 +14,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Tasklar (GitLab Issue) ekranlari. Holatsiz, faqat ko'rinish. */
+/** Tasklar (Issue) ekranlari. Holatsiz, faqat ko'rinish. */
 final class TaskScreens {
 
-  /** Uzun tavsif ekranga sig'ishi uchun qisqartiriladi; to'liq matn GitLab'da. */
+  /** Uzun tavsif ekranga sig'ishi uchun qisqartiriladi; to'liq matn xizmatning o'zida. */
   static final int DESCRIPTION_PREVIEW = 2500;
 
   private static final int GROUPS_PER_ROW = 2;
@@ -118,7 +118,7 @@ final class TaskScreens {
             .append("</b>\n")
             .append(label(opened.status()));
     task.dueDate().ifPresent(due -> html.append(" · 📅 ").append(DUE.format(due)));
-    html.append("\n").append(link(task.webUrl(), "GitLab'da ochish"));
+    html.append("\n").append(link(task.webUrl(), "🔗 Ochish"));
     if (!task.description().isBlank()) {
       html.append("\n\n").append(Html.escape(preview(task.description())));
     }
@@ -151,7 +151,7 @@ final class TaskScreens {
             + " · 🏷 "
             + ManageTasksUseCase.AI_TASK_LABEL
             + "\n"
-            + link(task.webUrl(), "GitLab'da ochish"),
+            + link(task.webUrl(), "🔗 Ochish"),
         List.of(
             List.of(new Button("📋 Ochish", Actions.openTask(task.iid()))),
             List.of(new Button("✅ Tasklar", Actions.TASKS))));

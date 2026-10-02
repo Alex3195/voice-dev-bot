@@ -15,18 +15,19 @@ import static org.mockito.Mockito.when;
 
 import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.CodeHostAndTracker;
 import com.alex.voicedevbot.support.GitLabFixtures;
 import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
@@ -53,14 +54,14 @@ class LinkRepoServiceTest {
       new InMemoryUserSettingsRepository();
   private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final CodeHost api = mock(CodeHost.class);
+  private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
   private final LinkRepoService service =
       new LinkRepoService(
           new AccessPolicy(Set.of(USER)),
           new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz")),
           connections,
           links,
-          api,
+          GitLabFixtures.integrations(api),
           project -> FILES,
           Clock.fixed(
               GitLabFixtures.TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
@@ -72,7 +73,7 @@ class LinkRepoServiceTest {
     new InMemoryProjectRepository().save(Project.named(ELT_IMZO));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
   }
 
   @Test
@@ -130,6 +131,7 @@ class LinkRepoServiceTest {
   void should_ask_for_new_token_when_it_is_expired_or_rejected() {
     ProviderConnection expired =
         connections.save(
+            Provider.GITLAB,
             ServerAddress.parse("git.example.uz"),
             TOKEN,
             GitLabFixtures.expiringOn(GitLabFixtures.TODAY));

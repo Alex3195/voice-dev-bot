@@ -14,7 +14,6 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
@@ -32,6 +31,7 @@ import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
 import com.alex.voicedevbot.domain.ServerAddress;
@@ -44,6 +44,7 @@ import com.alex.voicedevbot.domain.Transcript;
 import com.alex.voicedevbot.domain.TranscriptRecord;
 import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.CodeHostAndTracker;
 import com.alex.voicedevbot.support.GitLabFixtures;
 import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
@@ -79,7 +80,7 @@ class TaskDialogTest {
   private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
   private final InMemoryTranscriptionLog transcriptLog = new InMemoryTranscriptionLog();
-  private final CodeHost api = mock(CodeHost.class);
+  private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
   private final BotConversation conversation = conversation();
   private ProviderConnection connection;
 
@@ -89,18 +90,29 @@ class TaskDialogTest {
         new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz"));
     Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
     LinkRepoService repos =
-        new LinkRepoService(access, settings, connections, links, api, project -> Map.of(), clock);
+        new LinkRepoService(
+            access,
+            settings,
+            connections,
+            links,
+            GitLabFixtures.integrations(api),
+            project -> Map.of(),
+            clock);
     BrowseTranscriptsService transcripts = new BrowseTranscriptsService(access, transcriptLog);
     ProjectRepoAccess repoAccess =
-        new ProjectRepoAccess(access, settings, connections, links, clock);
+        new ProjectRepoAccess(
+            access, settings, connections, links, GitLabFixtures.integrations(api), clock);
     return new BotConversation(
         new ManageProjectsService(access, projects, settings, settingsRepository),
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         transcripts,
-        new ConnectionsDialog(new ManageConnectionsService(access, connections, api, clock), repos),
-        new TaskDialog(new ManageTasksService(repoAccess, api), repos, transcripts),
-        new DocsDialog(new BrowseDocsService(repoAccess, api)),
+        new ConnectionsDialog(
+            new ManageConnectionsService(
+                access, connections, GitLabFixtures.integrations(api), clock),
+            repos),
+        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new DocsDialog(new BrowseDocsService(repoAccess)),
         ZoneOffset.UTC);
   }
 
@@ -109,7 +121,7 @@ class TaskDialogTest {
     projects.save(Project.named(ELT_IMZO));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 

@@ -1,14 +1,20 @@
 package com.alex.voicedevbot.application.port.in;
 
+import com.alex.voicedevbot.domain.Provider;
 import java.util.List;
 
-/** GitLab ulanishlarini boshqarish natijasi. */
+/** Ulanishlarni boshqarish natijasi. */
 public sealed interface ConnectionResult {
 
-  record Listed(List<ConnectionView> connections) implements ConnectionResult {
+  /**
+   * @param providers bot ulana oladigan xizmatlar (adapteri bor)
+   */
+  record Listed(List<ConnectionView> connections, List<Provider> providers)
+      implements ConnectionResult {
 
     public Listed {
       connections = List.copyOf(connections);
+      providers = List.copyOf(providers);
     }
   }
 

@@ -2,6 +2,7 @@ package com.alex.voicedevbot.adapter.out.persistence;
 
 import com.alex.voicedevbot.application.port.out.ConnectionRepository;
 import com.alex.voicedevbot.domain.AccessToken;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenInfo;
@@ -20,16 +21,18 @@ import java.util.Optional;
 import java.util.Set;
 import javax.sql.DataSource;
 
-/** GitLab ulanishlari PostgreSQL'da; token {@link TokenCipher} bilan shifrlangan. */
+/** Ulanishlar (GitLab, GitHub) PostgreSQL'da; token {@link TokenCipher} bilan shifrlangan. */
 public class JdbcConnectionRepository implements ConnectionRepository {
 
   private static final String SELECT =
-      "select id, base_url, username, token_encrypted, scopes, expires_at from gitlab_connection";
+      "select id, provider, base_url, username, token_encrypted, scopes, expires_at"
+          + " from provider_connection";
   private static final String UPSERT =
       """
-      insert into gitlab_connection (base_url, username, token_encrypted, scopes, expires_at)
-      values (?, ?, ?, ?, ?)
-      on conflict (base_url, username) do update
+      insert into provider_connection
+          (provider, base_url, username, token_encrypted, scopes, expires_at)
+      values (?, ?, ?, ?, ?, ?)
+      on conflict (provider, base_url, username) do update
       set token_encrypted = excluded.token_encrypted, scopes = excluded.scopes,
           expires_at = excluded.expires_at, last_alerted_on = null, verified_at = now()
       returning id
@@ -44,29 +47,30 @@ public class JdbcConnectionRepository implements ConnectionRepository {
   }
 
   @Override
-  public ProviderConnection save(ServerAddress address, AccessToken token, TokenInfo info) {
+  public ProviderConnection save(
+      Provider provider, ServerAddress address, AccessToken token, TokenInfo info) {
     long id =
         jdbc.query(
-            "save GitLab connection",
+            "save connection",
             connection -> {
               try (PreparedStatement upsert = connection.prepareStatement(UPSERT)) {
-                bind(connection, upsert, address, token, info);
+                bind(connection, upsert, provider, address, token, info);
                 try (ResultSet rows = upsert.executeQuery()) {
                   rows.next();
                   return rows.getLong("id");
                 }
               }
             });
-    return new ProviderConnection(id, address, token, info);
+    return new ProviderConnection(id, provider, address, token, info);
   }
 
   @Override
   public List<ProviderConnection> findAll() {
     return jdbc.query(
-        "list GitLab connections",
+        "list connections",
         connection -> {
           try (PreparedStatement select =
-              connection.prepareStatement(SELECT + " order by base_url, username")) {
+              connection.prepareStatement(SELECT + " order by provider, base_url, username")) {
             return read(select);
           }
         });
@@ -75,7 +79,7 @@ public class JdbcConnectionRepository implements ConnectionRepository {
   @Override
   public Optional<ProviderConnection> find(long id) {
     return jdbc.query(
-        "find GitLab connection",
+        "find connection",
         connection -> {
           try (PreparedStatement select = connection.prepareStatement(SELECT + " where id = ?")) {
             select.setLong(1, id);
@@ -87,10 +91,10 @@ public class JdbcConnectionRepository implements ConnectionRepository {
   @Override
   public void remove(long id) {
     jdbc.query(
-        "remove GitLab connection",
+        "remove connection",
         connection -> {
           try (PreparedStatement delete =
-              connection.prepareStatement("delete from gitlab_connection where id = ?")) {
+              connection.prepareStatement("delete from provider_connection where id = ?")) {
             delete.setLong(1, id);
             return delete.executeUpdate();
           }
@@ -104,7 +108,7 @@ public class JdbcConnectionRepository implements ConnectionRepository {
         connection -> {
           try (PreparedStatement update =
               connection.prepareStatement(
-                  "update gitlab_connection set last_alerted_on = ?"
+                  "update provider_connection set last_alerted_on = ?"
                       + " where id = ? and last_alerted_on is distinct from ?")) {
             update.setDate(1, Date.valueOf(day));
             update.setLong(2, id);
@@ -117,18 +121,20 @@ public class JdbcConnectionRepository implements ConnectionRepository {
   private void bind(
       Connection connection,
       PreparedStatement upsert,
+      Provider provider,
       ServerAddress address,
       AccessToken token,
       TokenInfo info)
       throws SQLException {
-    upsert.setString(1, address.toString());
-    upsert.setString(2, info.owner());
-    upsert.setBytes(3, cipher.encrypt(token));
-    upsert.setArray(4, connection.createArrayOf("text", info.scopes().toArray()));
+    upsert.setString(1, provider.name());
+    upsert.setString(2, address.toString());
+    upsert.setString(3, info.owner());
+    upsert.setBytes(4, cipher.encrypt(token));
+    upsert.setArray(5, connection.createArrayOf("text", info.scopes().toArray()));
     if (info.expiresAt().isPresent()) {
-      upsert.setDate(5, Date.valueOf(info.expiresAt().get()));
+      upsert.setDate(6, Date.valueOf(info.expiresAt().get()));
     } else {
-      upsert.setNull(5, Types.DATE);
+      upsert.setNull(6, Types.DATE);
     }
   }
 
@@ -153,6 +159,7 @@ public class JdbcConnectionRepository implements ConnectionRepository {
             : TokenInfo.expiring(owner, scopes, expiresAt.toLocalDate());
     return new ProviderConnection(
         row.getLong("id"),
+        Provider.valueOf(row.getString("provider")),
         ServerAddress.parse(row.getString("base_url")),
         cipher.decrypt(row.getBytes("token_encrypted")),
         info);

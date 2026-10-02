@@ -16,13 +16,13 @@ import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
 import com.alex.voicedevbot.application.port.in.TasksResult;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
 import com.alex.voicedevbot.domain.ServerAddress;
@@ -31,6 +31,7 @@ import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.CodeHostAndTracker;
 import com.alex.voicedevbot.support.GitLabFixtures;
 import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
@@ -58,7 +59,7 @@ class ManageTasksServiceTest {
       new InMemoryUserSettingsRepository();
   private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final CodeHost api = mock(CodeHost.class);
+  private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
   private final ManageTasksService service =
       new ManageTasksService(
           new ProjectRepoAccess(
@@ -66,8 +67,8 @@ class ManageTasksServiceTest {
               new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz")),
               connections,
               links,
-              Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)),
-          api);
+              GitLabFixtures.integrations(api),
+              Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)));
 
   private ProviderConnection connection;
 
@@ -75,7 +76,7 @@ class ManageTasksServiceTest {
   void linkedProject() {
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 
@@ -228,7 +229,10 @@ class ManageTasksServiceTest {
   @Test
   void should_ask_for_new_token_without_calling_gitlab_when_token_expired() {
     connections.save(
-        ServerAddress.GITLAB_COM, TOKEN, GitLabFixtures.expiringOn(TODAY.minusDays(1)));
+        Provider.GITLAB,
+        ServerAddress.GITLAB_COM,
+        TOKEN,
+        GitLabFixtures.expiringOn(TODAY.minusDays(1)));
 
     assertThat(service.overview(USER)).isInstanceOf(RepoUnavailable.NeedsNewToken.class);
     verifyNoInteractions(api);

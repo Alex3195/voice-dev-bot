@@ -2,7 +2,7 @@ package com.alex.voicedevbot.application.port.out;
 
 import java.util.Objects;
 
-/** GitLab so'rovi bajarilmadi. Xabarda token bo'lmaydi. */
+/** Tashqi xizmat (GitLab, GitHub) so'rovi bajarilmadi. Xabarda token bo'lmaydi. */
 public class IntegrationException extends RuntimeException {
 
   public enum Reason {

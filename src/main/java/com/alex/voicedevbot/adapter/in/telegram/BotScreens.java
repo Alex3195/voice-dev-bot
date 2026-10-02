@@ -67,7 +67,7 @@ final class BotScreens {
         "⚙️ <b>Sozlamalar</b>\n\n🌐 Nutq tili: " + languageLabel(language),
         List.of(
             List.of(new Button("🌐 Nutq tili", Actions.LANGUAGES)),
-            List.of(new Button("🔗 GitLab", Actions.GITLAB)),
+            List.of(new Button("🔗 Ulanishlar", Actions.CONNECTIONS)),
             List.of(new Button("📝 Projectsiz transkriptlar", Actions.transcripts(null, 0))),
             List.of(BACK_HOME)));
   }
@@ -240,7 +240,8 @@ final class BotScreens {
         3️⃣ <b>Ovoz yuboring</b> — voice, audio fayl, video yoki dumaloq video (20 MB gacha).
 
         📝 Avvalgi transkriptlar — project kartochkasida (📁 Projectlar → project).
-        ✅ Tasklar va 📄 Hujjatlar — ham kartochkada, project GitLab repo'ga ulangan bo'lsa.
+        ✅ Tasklar va 📄 Hujjatlar — ham kartochkada, project repo'ga ulangan bo'lsa.
+        🔗 GitLab tokenlari — ⚙️ Sozlamalar → 🔗 Ulanishlar (holati va muddati bilan).
         🌐 Boshqa tilda gapirsangiz — ⚙️ Sozlamalar → 🌐 Nutq tili.
 
         <b>Buyruqlar</b> (xohlasangiz):

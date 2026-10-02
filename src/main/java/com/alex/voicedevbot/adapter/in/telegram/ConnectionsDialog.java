@@ -7,8 +7,10 @@ import com.alex.voicedevbot.application.port.in.ConnectionResult;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
 import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TelegramUserId;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,9 +20,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * GitLab ulanishlari ({@code ⚙️ → 🔗 GitLab}) va faol projectni repo'ga bog'lash. Tugmalari {@link
- * Actions#GITLAB} bilan boshlanadi; kutilayotgan kiritish (manzil, token, qidiruv, repo nomi) shu
- * yerda, xotirada.
+ * Xizmatlarga ulanishlar ({@code ⚙️ → 🔗 Ulanishlar}) va faol projectni repo'ga bog'lash. Tugmalari
+ * {@link Actions#CONNECTIONS} bilan boshlanadi; kutilayotgan kiritish (manzil, token, qidiruv, repo
+ * nomi) shu yerda, xotirada.
  */
 public class ConnectionsDialog {
 
@@ -29,9 +31,9 @@ public class ConnectionsDialog {
 
   /** Bot foydalanuvchidan nimani kutyapti. */
   private sealed interface Awaiting {
-    record Address() implements Awaiting {}
+    record Address(Provider provider) implements Awaiting {}
 
-    record Token(ServerAddress address) implements Awaiting {}
+    record Token(Provider provider, ServerAddress address) implements Awaiting {}
 
     record RenewedToken(long connectionId) implements Awaiting {}
 
@@ -40,12 +42,12 @@ public class ConnectionsDialog {
     record RepoName(long connectionId, long namespaceId) implements Awaiting {}
   }
 
-  private final ManageConnectionsUseCase gitLab;
+  private final ManageConnectionsUseCase manager;
   private final LinkRepoUseCase repos;
   private final Map<TelegramUserId, Awaiting> awaiting = new ConcurrentHashMap<>();
 
-  public ConnectionsDialog(ManageConnectionsUseCase gitLab, LinkRepoUseCase repos) {
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
+  public ConnectionsDialog(ManageConnectionsUseCase manager, LinkRepoUseCase repos) {
+    this.manager = Objects.requireNonNull(manager, "manager");
     this.repos = Objects.requireNonNull(repos, "repos");
   }
 
@@ -83,9 +85,10 @@ public class ConnectionsDialog {
     }
     String input = text.strip();
     return switch (current) {
-      case Awaiting.Address() -> askToken(user, input);
-      case Awaiting.Token(var address) -> describe(gitLab.add(user, address.toString(), input));
-      case Awaiting.RenewedToken(var id) -> describe(gitLab.renew(user, id, input));
+      case Awaiting.Address(var provider) -> askToken(user, provider, input);
+      case Awaiting.Token(var provider, var address) ->
+          describe(manager.add(user, provider, address.toString(), input));
+      case Awaiting.RenewedToken(var id) -> describe(manager.renew(user, id, input));
       case Awaiting.RepoQuery(var id) -> searchRepos(user, id, input);
       case Awaiting.RepoName(var id, var namespace) ->
           describeRepo(repos.create(user, id, namespace, input), "✅ Repo yaratildi va ulandi");
@@ -94,14 +97,8 @@ public class ConnectionsDialog {
 
   private Optional<Screen> screenFor(TelegramUserId user, String action) {
     return switch (action) {
-      case Actions.GITLAB -> describe(gitLab.list(user));
-      case Actions.GITLAB_ADD ->
-          isAllowed(user) ? Optional.of(ConnectionScreens.chooseServer()) : Optional.empty();
-      case Actions.GITLAB_COM -> askToken(user, ServerAddress.GITLAB_COM.toString());
-      case Actions.GITLAB_OTHER ->
-          isAllowed(user)
-              ? await(user, new Awaiting.Address(), ConnectionScreens.askAddress())
-              : Optional.empty();
+      case Actions.CONNECTIONS -> describe(manager.list(user));
+      case Actions.CONNECTION_ADD -> chooseProvider(user);
       case Actions.REPO -> describeRepo(repos.show(user));
       case Actions.REPO_CHOOSE -> chooseRepo(user);
       case Actions.REPO_UNLINK ->
@@ -111,17 +108,33 @@ public class ConnectionsDialog {
   }
 
   private Optional<Screen> withArgument(TelegramUserId user, String action) {
-    if (action.startsWith(Actions.GITLAB_SHOW)) {
-      return id(action, Actions.GITLAB_SHOW).flatMap(id -> describe(gitLab.show(user, id)));
+    if (action.startsWith(Actions.CONNECTION_DEFAULT)) {
+      return provider(action, Actions.CONNECTION_DEFAULT)
+          .flatMap(provider -> askToken(user, provider, provider.defaultAddress().toString()));
     }
-    if (action.startsWith(Actions.GITLAB_RENEW)) {
-      return id(action, Actions.GITLAB_RENEW).flatMap(id -> askRenewedToken(user, id));
+    if (action.startsWith(Actions.CONNECTION_OTHER)) {
+      return provider(action, Actions.CONNECTION_OTHER)
+          .filter(Provider::selfHosted)
+          .filter(provider -> isAllowed(user))
+          .flatMap(
+              provider ->
+                  await(
+                      user,
+                      new Awaiting.Address(provider),
+                      ConnectionScreens.askAddress(provider)));
     }
-    if (action.startsWith(Actions.GITLAB_REMOVE_ASK)) {
-      return id(action, Actions.GITLAB_REMOVE_ASK).flatMap(id -> confirmRemove(user, id));
+    if (action.startsWith(Actions.CONNECTION_SHOW)) {
+      return id(action, Actions.CONNECTION_SHOW).flatMap(id -> describe(manager.show(user, id)));
     }
-    if (action.startsWith(Actions.GITLAB_REMOVE)) {
-      return id(action, Actions.GITLAB_REMOVE).flatMap(id -> describe(gitLab.remove(user, id)));
+    if (action.startsWith(Actions.CONNECTION_RENEW)) {
+      return id(action, Actions.CONNECTION_RENEW).flatMap(id -> askRenewedToken(user, id));
+    }
+    if (action.startsWith(Actions.CONNECTION_REMOVE_ASK)) {
+      return id(action, Actions.CONNECTION_REMOVE_ASK).flatMap(id -> confirmRemove(user, id));
+    }
+    if (action.startsWith(Actions.CONNECTION_REMOVE)) {
+      return id(action, Actions.CONNECTION_REMOVE)
+          .flatMap(id -> describe(manager.remove(user, id)));
     }
     if (action.startsWith(Actions.REPO_PICK)) {
       return id(action, Actions.REPO_PICK).flatMap(id -> searchRepos(user, id, ""));
@@ -139,7 +152,14 @@ public class ConnectionsDialog {
     return Optional.empty();
   }
 
-  private Optional<Screen> askToken(TelegramUserId user, String address) {
+  /** Faqat bot ulana oladigan xizmatlar taklif qilinadi. */
+  private Optional<Screen> chooseProvider(TelegramUserId user) {
+    return manager.list(user) instanceof ConnectionResult.Listed listed
+        ? Optional.of(ConnectionScreens.chooseProvider(listed.providers()))
+        : Optional.empty();
+  }
+
+  private Optional<Screen> askToken(TelegramUserId user, Provider provider, String address) {
     if (!isAllowed(user)) {
       return Optional.empty();
     }
@@ -149,15 +169,16 @@ public class ConnectionsDialog {
     } catch (IllegalArgumentException e) {
       return await(
           user,
-          new Awaiting.Address(),
-          ConnectionScreens.askAddress()
+          new Awaiting.Address(provider),
+          ConnectionScreens.askAddress(provider)
               .withNotice(ConnectionScreens.problem(ConnectionProblem.INVALID_ADDRESS)));
     }
-    return await(user, new Awaiting.Token(parsed), ConnectionScreens.askToken(parsed));
+    return await(
+        user, new Awaiting.Token(provider, parsed), ConnectionScreens.askToken(provider, parsed));
   }
 
   private Optional<Screen> askRenewedToken(TelegramUserId user, long id) {
-    ConnectionResult result = gitLab.show(user, id);
+    ConnectionResult result = manager.show(user, id);
     if (!(result instanceof ConnectionResult.Shown(var view))) {
       return describe(result);
     }
@@ -165,7 +186,7 @@ public class ConnectionsDialog {
   }
 
   private Optional<Screen> confirmRemove(TelegramUserId user, long id) {
-    ConnectionResult result = gitLab.show(user, id);
+    ConnectionResult result = manager.show(user, id);
     return result instanceof ConnectionResult.Shown(var view)
         ? Optional.of(ConnectionScreens.confirmRemove(view))
         : describe(result);
@@ -184,8 +205,8 @@ public class ConnectionsDialog {
   private Optional<Screen> chooseRepo(TelegramUserId user) {
     RepoLinkResult result = repos.show(user);
     if (result instanceof RepoLinkResult.Linked linked
-        && gitLab.list(user) instanceof ConnectionResult.Listed(var connections)) {
-      return Optional.of(ConnectionScreens.choose(linked.project(), connections));
+        && manager.list(user) instanceof ConnectionResult.Listed listed) {
+      return Optional.of(ConnectionScreens.choose(linked.project(), listed.connections()));
     }
     return describeRepo(result);
   }
@@ -204,8 +225,8 @@ public class ConnectionsDialog {
 
   private static Optional<Screen> describe(ConnectionResult result) {
     return switch (result) {
-      case ConnectionResult.Listed(var connections) ->
-          Optional.of(ConnectionScreens.list(connections));
+      case ConnectionResult.Listed(var connections, var providers) ->
+          Optional.of(ConnectionScreens.list(connections, providers));
       case ConnectionResult.Shown(var view) -> Optional.of(ConnectionScreens.detail(view));
       case ConnectionResult.Saved(var view) ->
           Optional.of(
@@ -250,7 +271,7 @@ public class ConnectionsDialog {
   }
 
   private boolean isAllowed(TelegramUserId user) {
-    return !(gitLab.list(user) instanceof ConnectionResult.AccessDenied);
+    return !(manager.list(user) instanceof ConnectionResult.AccessDenied);
   }
 
   private Optional<Screen> await(TelegramUserId user, Awaiting next, Screen question) {
@@ -263,6 +284,13 @@ public class ConnectionsDialog {
     return ID.matcher(argument).matches()
         ? Optional.of(Long.parseLong(argument))
         : Optional.empty();
+  }
+
+  private static Optional<Provider> provider(String action, String prefix) {
+    String name = action.substring(prefix.length());
+    return Arrays.stream(Provider.values())
+        .filter(provider -> provider.name().equals(name))
+        .findFirst();
   }
 
   private static Optional<long[]> pair(String action, String prefix) {

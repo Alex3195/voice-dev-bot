@@ -3,18 +3,17 @@ package com.alex.voicedevbot.application.port.out;
 import com.alex.voicedevbot.domain.AccessToken;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.Namespace;
-import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.ServerAddress;
-import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * GitLab server bilan ishlash. Barcha metodlar xato bo'lsa {@link IntegrationException} tashlaydi.
+ * Kod xizmati (GitLab, GitHub): repo'lar, fayllar va MR/PR'lar. Har provayder uchun alohida
+ * adapter. Barcha metodlar xato bo'lsa {@link IntegrationException} tashlaydi.
  */
 public interface CodeHost {
 
@@ -38,26 +37,6 @@ public interface CodeHost {
       ProviderConnection connection, long namespaceId, String name, Map<String, String> files);
 
   /**
-   * Repo'dagi barcha issue'lar (ochiq va yopiq), eng yangisi birinchi, ko'pi bilan {@code limit}.
-   */
-  List<Task> issues(ProviderConnection connection, long repoId, int limit);
-
-  Task issue(ProviderConnection connection, long repoId, long iid);
-
-  /** Issue'ni yopadigan yoki unga havola qilgan MR'lar. */
-  List<MergeRequest> mergeRequests(ProviderConnection connection, long repoId, long iid);
-
-  /**
-   * @param labels yo'q bo'lsa GitLab o'zi yaratadi
-   */
-  Task createIssue(ProviderConnection connection, long repoId, NewTask task, List<String> labels);
-
-  /**
-   * @param open {@code true} — qayta ochish, {@code false} — yopish
-   */
-  Task setIssueOpen(ProviderConnection connection, long repoId, long iid, boolean open);
-
-  /**
    * Standart branch'dagi fayllar yo'li (papkalarsiz). Papka yo'q bo'lsa — bo'sh ro'yxat.
    *
    * @param directory repo ildizidan; {@code ""} — ildiz
@@ -68,4 +47,7 @@ public interface CodeHost {
 
   /** Standart branch'dagi fayl matni; fayl yo'q bo'lsa — bo'sh. */
   Optional<String> readFile(ProviderConnection connection, long repoId, String path);
+
+  /** Task (issue) raqamiga havola qilgan yoki uni yopadigan MR/PR'lar. */
+  List<MergeRequest> mergeRequests(ProviderConnection connection, long repoId, long iid);
 }

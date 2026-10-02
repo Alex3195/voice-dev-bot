@@ -62,7 +62,7 @@ public class BotConversation {
   private final ManageGlossaryUseCase glossary;
   private final ChangeLanguageUseCase language;
   private final BrowseTranscriptsUseCase transcripts;
-  private final ConnectionsDialog gitLab;
+  private final ConnectionsDialog connections;
   private final TaskDialog tasks;
   private final DocsDialog docs;
   private final ZoneId zone;
@@ -76,7 +76,7 @@ public class BotConversation {
       ManageGlossaryUseCase glossary,
       ChangeLanguageUseCase language,
       BrowseTranscriptsUseCase transcripts,
-      ConnectionsDialog gitLab,
+      ConnectionsDialog connections,
       TaskDialog tasks,
       DocsDialog docs,
       ZoneId zone) {
@@ -84,7 +84,7 @@ public class BotConversation {
     this.glossary = Objects.requireNonNull(glossary, "glossary");
     this.language = Objects.requireNonNull(language, "language");
     this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
+    this.connections = Objects.requireNonNull(connections, "connections");
     this.tasks = Objects.requireNonNull(tasks, "tasks");
     this.docs = Objects.requireNonNull(docs, "docs");
     this.zone = Objects.requireNonNull(zone, "zone");
@@ -92,13 +92,13 @@ public class BotConversation {
 
   /** Matnli xabar: buyruq, bot so'ragan qiymat yoki oddiy matn (bosh menyu ko'rsatiladi). */
   Optional<Screen> onText(TelegramUserId user, String text) {
-    if (!isCommand(text) && gitLab.awaitsInput(user)) {
-      return gitLab.onText(user, text);
+    if (!isCommand(text) && connections.awaitsInput(user)) {
+      return connections.onText(user, text);
     }
     if (!isCommand(text) && tasks.awaitsInput(user)) {
       return tasks.onText(user, text);
     }
-    gitLab.cancel(user);
+    connections.cancel(user);
     tasks.cancel(user);
     Pending awaited = pending.remove(user);
     try {
@@ -117,7 +117,7 @@ public class BotConversation {
   /** Inline tugma bosildi. */
   Optional<Reply> onButton(TelegramUserId user, String data) {
     pending.remove(user);
-    gitLab.cancel(user);
+    connections.cancel(user);
     tasks.cancel(user);
     boolean asNewMessage = data.startsWith(Actions.NEW_MESSAGE);
     String action = asNewMessage ? data.substring(Actions.NEW_MESSAGE.length()) : data;
@@ -130,8 +130,8 @@ public class BotConversation {
     if (action.startsWith(Actions.SET_LANGUAGE)) {
       return changeLanguage(user, action.substring(Actions.SET_LANGUAGE.length()));
     }
-    if (action.equals(Actions.GITLAB) || action.startsWith(Actions.GITLAB_PREFIX)) {
-      return gitLab.onButton(user, action);
+    if (action.equals(Actions.CONNECTIONS) || action.startsWith(Actions.CONNECTION_PREFIX)) {
+      return connections.onButton(user, action);
     }
     if (TaskDialog.handles(action)) {
       return tasks.onButton(user, action, asNewMessage);
@@ -150,7 +150,7 @@ public class BotConversation {
 
   /** Bot token kutyapti — foydalanuvchi yozgan xabar chatdan o'chirilishi kerak. */
   boolean expectsSecret(TelegramUserId user) {
-    return gitLab.expectsSecret(user);
+    return connections.expectsSecret(user);
   }
 
   /**
@@ -277,7 +277,7 @@ public class BotConversation {
     projects.selectProject(user, name.get());
     return context(user)
         .flatMap(context -> context.projects().stream().filter(ProjectSummary::active).findFirst())
-        .map(summary -> BotScreens.projectCard(summary, gitLab.repoButton(user)))
+        .map(summary -> BotScreens.projectCard(summary, connections.repoButton(user)))
         .map(card -> new Reply(card, false, ""));
   }
 

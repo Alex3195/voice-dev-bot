@@ -26,14 +26,14 @@ import java.util.regex.Pattern;
 
 public class LinkRepoService implements LinkRepoUseCase {
 
-  /** GitLab repo nomi: harf, raqam, {@code _ . -} va bo'sh joy. */
+  /** Repo nomi (GitLab va GitHub uchun xavfsiz): harf, raqam, {@code _ . -} va bo'sh joy. */
   private static final Pattern REPO_NAME = Pattern.compile("[\\p{L}\\p{N}_.\\- ]{1,100}");
 
   private final AccessPolicy accessPolicy;
   private final UserSettingsLookup settings;
   private final ConnectionRepository connections;
   private final ProjectRepoLinks links;
-  private final CodeHost gitLab;
+  private final Integrations integrations;
   private final RepoTemplate template;
   private final Clock clock;
 
@@ -42,14 +42,14 @@ public class LinkRepoService implements LinkRepoUseCase {
       UserSettingsLookup settings,
       ConnectionRepository connections,
       ProjectRepoLinks links,
-      CodeHost gitLab,
+      Integrations integrations,
       RepoTemplate template,
       Clock clock) {
     this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy");
     this.settings = Objects.requireNonNull(settings, "settings");
     this.connections = Objects.requireNonNull(connections, "connections");
     this.links = Objects.requireNonNull(links, "links");
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
+    this.integrations = Objects.requireNonNull(integrations, "integrations");
     this.template = Objects.requireNonNull(template, "template");
     this.clock = Objects.requireNonNull(clock, "clock");
   }
@@ -67,7 +67,7 @@ public class LinkRepoService implements LinkRepoUseCase {
         connectionId,
         (project, connection) ->
             new RepoLinkResult.Repos(
-                connectionId, trimmed, gitLab.searchRepos(connection, trimmed)));
+                connectionId, trimmed, code(connection).searchRepos(connection, trimmed)));
   }
 
   @Override
@@ -76,7 +76,7 @@ public class LinkRepoService implements LinkRepoUseCase {
         user,
         connectionId,
         (project, connection) ->
-            new RepoLinkResult.Namespaces(connectionId, gitLab.namespaces(connection)));
+            new RepoLinkResult.Namespaces(connectionId, code(connection).namespaces(connection)));
   }
 
   @Override
@@ -84,7 +84,8 @@ public class LinkRepoService implements LinkRepoUseCase {
     return withConnection(
         user,
         connectionId,
-        (project, connection) -> save(project, connection, gitLab.findRepo(connection, repoId)));
+        (project, connection) ->
+            save(project, connection, code(connection).findRepo(connection, repoId)));
   }
 
   @Override
@@ -103,7 +104,8 @@ public class LinkRepoService implements LinkRepoUseCase {
             save(
                 project,
                 connection,
-                gitLab.createRepo(connection, namespaceId, trimmed, template.files(project))));
+                code(connection)
+                    .createRepo(connection, namespaceId, trimmed, template.files(project))));
   }
 
   @Override
@@ -145,7 +147,7 @@ public class LinkRepoService implements LinkRepoUseCase {
         .orElseGet(RepoLinkResult.NoActiveProject::new);
   }
 
-  /** Tugagan yoki GitLab rad etgan token bilan amal bajarilmaydi — yangilash taklif qilinadi. */
+  /** Tugagan yoki xizmat rad etgan token bilan amal bajarilmaydi — yangilash taklif qilinadi. */
   private RepoLinkResult withConnection(
       TelegramUserId user,
       long connectionId,
@@ -169,6 +171,10 @@ public class LinkRepoService implements LinkRepoUseCase {
                 : new RepoLinkResult.Failed(ConnectionProblems.of(e));
           }
         });
+  }
+
+  private CodeHost code(ProviderConnection connection) {
+    return integrations.codeHost(connection);
   }
 
   private ConnectionView view(ProviderConnection connection) {

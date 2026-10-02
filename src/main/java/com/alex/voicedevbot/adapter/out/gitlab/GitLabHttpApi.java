@@ -3,6 +3,7 @@ package com.alex.voicedevbot.adapter.out.gitlab;
 import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
+import com.alex.voicedevbot.application.port.out.IssueTracker;
 import com.alex.voicedevbot.domain.AccessToken;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.Namespace;
@@ -41,7 +42,7 @@ import tools.jackson.databind.node.ObjectNode;
  * GitLab REST API v4 ({@code PRIVATE-TOKEN} sarlavhasi bilan). gitlab.com va self-hosted uchun bir
  * xil — faqat manzil farq qiladi. Token hech qachon xato xabariga tushmaydi.
  */
-public class GitLabHttpApi implements CodeHost {
+public class GitLabHttpApi implements CodeHost, IssueTracker {
 
   static final int PAGE_SIZE = 10;
   static final String INITIAL_BRANCH = "main";
@@ -317,7 +318,7 @@ public class GitLabHttpApi implements CodeHost {
   }
 
   private HttpRequest.Builder request(ServerAddress address, AccessToken token, String path) {
-    return HttpRequest.newBuilder(address.api(path))
+    return HttpRequest.newBuilder(api(address, path))
         .timeout(timeout)
         .header("PRIVATE-TOKEN", token.value())
         .header("Accept", "application/json");
@@ -351,6 +352,11 @@ public class GitLabHttpApi implements CodeHost {
           reasonOf(status, response.body()), description + " returned HTTP " + status, null);
     }
     return response.body();
+  }
+
+  /** API manzili, masalan {@code https://gitlab.com/api/v4/user}. */
+  static URI api(ServerAddress address, String pathAndQuery) {
+    return URI.create(address + "/api/v4" + pathAndQuery);
   }
 
   /** GitLab band nomni 400 "has already been taken" bilan qaytaradi. */

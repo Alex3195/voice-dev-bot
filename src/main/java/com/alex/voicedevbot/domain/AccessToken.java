@@ -3,7 +3,8 @@ package com.alex.voicedevbot.domain;
 import java.util.regex.Pattern;
 
 /**
- * GitLab access token. Sir: {@link #toString()} va {@link #masked()} faqat chetlarini ko'rsatadi.
+ * Xizmat (GitLab, GitHub) access tokeni. Sir: {@link #toString()} va {@link #masked()} faqat
+ * chetlarini ko'rsatadi.
  */
 public record AccessToken(String value) {
 
@@ -12,7 +13,7 @@ public record AccessToken(String value) {
 
   public AccessToken {
     if (value == null || !ALLOWED.matcher(value.strip()).matches()) {
-      throw new IllegalArgumentException("GitLab token has invalid format");
+      throw new IllegalArgumentException("Access token has invalid format");
     }
     value = value.strip();
   }

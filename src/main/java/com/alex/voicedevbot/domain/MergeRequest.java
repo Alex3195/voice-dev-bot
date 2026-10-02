@@ -3,7 +3,7 @@ package com.alex.voicedevbot.domain;
 import java.net.URI;
 import java.util.Objects;
 
-/** Task'ga bog'langan GitLab Merge Request. */
+/** Task'ga bog'langan Merge Request (GitHub'da Pull Request). */
 public record MergeRequest(long iid, String title, State state, URI webUrl) {
 
   public MergeRequest {

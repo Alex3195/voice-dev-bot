@@ -4,7 +4,6 @@ import com.alex.voicedevbot.application.port.in.BrowseDocsUseCase;
 import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.DocsResult;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,11 +21,9 @@ public class BrowseDocsService implements BrowseDocsUseCase {
       List.of("CLAUDE.md", "README.md", "docs/roadmap.md", "docs/decisions/", "docs/specs/");
 
   private final ProjectRepoAccess access;
-  private final CodeHost gitLab;
 
-  public BrowseDocsService(ProjectRepoAccess access, CodeHost gitLab) {
+  public BrowseDocsService(ProjectRepoAccess access) {
     this.access = Objects.requireNonNull(access, "access");
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
   }
 
   @Override
@@ -35,8 +32,8 @@ public class BrowseDocsService implements BrowseDocsUseCase {
         user,
         repo -> {
           List<String> paths =
-              new ArrayList<>(gitLab.files(repo.connection(), repo.repoId(), "", false));
-          paths.addAll(gitLab.files(repo.connection(), repo.repoId(), DOCS_DIRECTORY, true));
+              new ArrayList<>(repo.code().files(repo.connection(), repo.repoId(), "", false));
+          paths.addAll(repo.code().files(repo.connection(), repo.repoId(), DOCS_DIRECTORY, true));
           List<String> documents =
               paths.stream()
                   .filter(BrowseDocsService::isDocument)
@@ -58,7 +55,7 @@ public class BrowseDocsService implements BrowseDocsUseCase {
           if (!isDocument(path)) {
             return new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND);
           }
-          return gitLab
+          return repo.code()
               .readFile(repo.connection(), repo.repoId(), path)
               .<DocsResult>map(content -> new DocsResult.Opened(repo.project(), path, content))
               .orElseGet(() -> new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));

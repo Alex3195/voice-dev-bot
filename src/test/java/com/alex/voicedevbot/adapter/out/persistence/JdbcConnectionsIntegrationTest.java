@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.RepoLink;
@@ -29,7 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** GitLab ulanishlari va project ↔ repo haqiqiy PostgreSQL'da. */
+/** Ulanishlar va project ↔ repo haqiqiy PostgreSQL'da. */
 class JdbcConnectionsIntegrationTest {
 
   private static final ProjectName ELT_IMZO = new ProjectName("ELT imzo");
@@ -56,20 +57,20 @@ class JdbcConnectionsIntegrationTest {
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement()) {
       statement.execute(
-          "truncate project_repo, gitlab_connection, glossary_term, project restart identity"
+          "truncate project_repo, provider_connection, glossary_term, project restart identity"
               + " cascade");
     }
   }
 
   @Test
   void should_save_and_read_connection_with_encrypted_token() throws Exception {
-    ProviderConnection saved = connections.save(SELF_HOSTED, TOKEN, VALID);
+    ProviderConnection saved = connections.save(Provider.GITLAB, SELF_HOSTED, TOKEN, VALID);
 
     assertThat(connections.find(saved.id())).contains(saved);
     assertThat(connections.findAll()).containsExactly(saved);
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement();
-        ResultSet row = statement.executeQuery("select token_encrypted from gitlab_connection")) {
+        ResultSet row = statement.executeQuery("select token_encrypted from provider_connection")) {
       row.next();
       assertThat(new String(row.getBytes(1), StandardCharsets.ISO_8859_1))
           .doesNotContain("secretToken");
@@ -78,20 +79,38 @@ class JdbcConnectionsIntegrationTest {
 
   @Test
   void should_update_token_of_same_server_and_owner_instead_of_duplicating() {
-    ProviderConnection first = connections.save(SELF_HOSTED, TOKEN, VALID);
+    ProviderConnection first = connections.save(Provider.GITLAB, SELF_HOSTED, TOKEN, VALID);
     TokenInfo withoutExpiry = TokenInfo.withoutExpiry("alex", Set.of("api", "read_user"));
 
-    ProviderConnection second = connections.save(SELF_HOSTED, NEW_TOKEN, withoutExpiry);
+    ProviderConnection second =
+        connections.save(Provider.GITLAB, SELF_HOSTED, NEW_TOKEN, withoutExpiry);
 
     assertThat(second.id()).isEqualTo(first.id());
     assertThat(connections.findAll())
-        .containsExactly(new ProviderConnection(first.id(), SELF_HOSTED, NEW_TOKEN, withoutExpiry));
+        .containsExactly(
+            new ProviderConnection(
+                first.id(), Provider.GITLAB, SELF_HOSTED, NEW_TOKEN, withoutExpiry));
+  }
+
+  @Test
+  void should_keep_same_owner_on_different_providers_as_separate_connections() {
+    ServerAddress sameServer = ServerAddress.parse("git.example.uz");
+    ProviderConnection gitLab = connections.save(Provider.GITLAB, sameServer, TOKEN, VALID);
+
+    ProviderConnection gitHub = connections.save(Provider.GITHUB, sameServer, NEW_TOKEN, VALID);
+
+    assertThat(gitHub.id()).isNotEqualTo(gitLab.id());
+    assertThat(connections.findAll())
+        .extracting(ProviderConnection::provider)
+        .containsExactly(Provider.GITHUB, Provider.GITLAB);
+    assertThat(connections.find(gitHub.id())).contains(gitHub);
   }
 
   @Test
   void should_order_connections_and_remove_with_their_repo_links() {
-    ProviderConnection selfHosted = connections.save(SELF_HOSTED, TOKEN, VALID);
-    ProviderConnection gitLabCom = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
+    ProviderConnection selfHosted = connections.save(Provider.GITLAB, SELF_HOSTED, TOKEN, VALID);
+    ProviderConnection gitLabCom =
+        connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     projects.save(Project.named(ELT_IMZO));
     links.link(ELT_IMZO, new RepoLink(selfHosted.id(), REPO));
 
@@ -104,18 +123,18 @@ class JdbcConnectionsIntegrationTest {
 
   @Test
   void should_claim_expiry_alert_once_per_day_and_reset_after_renewal() {
-    ProviderConnection saved = connections.save(SELF_HOSTED, TOKEN, VALID);
+    ProviderConnection saved = connections.save(Provider.GITLAB, SELF_HOSTED, TOKEN, VALID);
 
     assertThat(connections.claimExpiryAlert(saved.id(), GitLabFixtures.TODAY)).isTrue();
     assertThat(connections.claimExpiryAlert(saved.id(), GitLabFixtures.TODAY)).isFalse();
     assertThat(connections.claimExpiryAlert(saved.id(), GitLabFixtures.TODAY.plusDays(1))).isTrue();
-    connections.save(SELF_HOSTED, NEW_TOKEN, VALID);
+    connections.save(Provider.GITLAB, SELF_HOSTED, NEW_TOKEN, VALID);
     assertThat(connections.claimExpiryAlert(saved.id(), GitLabFixtures.TODAY.plusDays(1))).isTrue();
   }
 
   @Test
   void should_link_replace_and_unlink_project_repo() {
-    ProviderConnection saved = connections.save(SELF_HOSTED, TOKEN, VALID);
+    ProviderConnection saved = connections.save(Provider.GITLAB, SELF_HOSTED, TOKEN, VALID);
     projects.save(Project.named(ELT_IMZO));
     Repo other = new Repo(43, "akfa/elt", URI.create("https://git.example.uz/akfa/elt"));
 
@@ -129,7 +148,7 @@ class JdbcConnectionsIntegrationTest {
 
   @Test
   void should_ignore_link_for_unknown_project() {
-    ProviderConnection saved = connections.save(SELF_HOSTED, TOKEN, VALID);
+    ProviderConnection saved = connections.save(Provider.GITLAB, SELF_HOSTED, TOKEN, VALID);
 
     links.link(new ProjectName("Yo'q"), new RepoLink(saved.id(), REPO));
 

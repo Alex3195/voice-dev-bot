@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Project repo'sidagi GitLab Issue.
+ * Project repo'sidagi Issue (GitLab, GitHub).
  *
  * @param iid repo ichidagi raqam ({@code #12})
  * @param description bo'sh bo'lishi mumkin

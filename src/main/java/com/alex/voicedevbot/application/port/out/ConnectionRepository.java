@@ -1,6 +1,7 @@
 package com.alex.voicedevbot.application.port.out;
 
 import com.alex.voicedevbot.domain.AccessToken;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenInfo;
@@ -9,14 +10,15 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * GitLab ulanishlari. Token faqat shifrlangan holda saqlanadi. Bitta server + token egasi — bitta
- * ulanish: qayta qo'shilsa token yangilanadi.
+ * Xizmatlarga ulanishlar (GitLab, GitHub). Token faqat shifrlangan holda saqlanadi. Bitta xizmat +
+ * server + token egasi — bitta ulanish: qayta qo'shilsa token yangilanadi.
  */
 public interface ConnectionRepository {
 
-  ProviderConnection save(ServerAddress address, AccessToken token, TokenInfo info);
+  ProviderConnection save(
+      Provider provider, ServerAddress address, AccessToken token, TokenInfo info);
 
-  /** Server bo'yicha, keyin token egasi bo'yicha tartiblangan. */
+  /** Xizmat, server, keyin token egasi bo'yicha tartiblangan. */
   List<ProviderConnection> findAll();
 
   Optional<ProviderConnection> find(long id);

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
 import com.alex.voicedevbot.application.port.in.TokenExpiryAlertsUseCase;
 import com.alex.voicedevbot.application.port.out.StorageException;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TelegramUserId;
@@ -36,6 +37,7 @@ class TokenExpiryNotifierTest {
     ProviderConnection connection =
         new ProviderConnection(
             5,
+            Provider.GITLAB,
             ServerAddress.GITLAB_COM,
             GitLabFixtures.TOKEN,
             GitLabFixtures.expiringOn(LocalDate.of(2026, 10, 5)));
@@ -51,7 +53,7 @@ class TokenExpiryNotifierTest {
         .startsWith("⚠️ <b>GitLab tokeni tugayapti</b>")
         .contains("2026-10-05 da tugaydi");
     assertThat(alert.getValue().rows().getFirst().getFirst().action())
-        .isEqualTo(Actions.GITLAB_RENEW + 5);
+        .isEqualTo(Actions.CONNECTION_RENEW + 5);
   }
 
   @Test

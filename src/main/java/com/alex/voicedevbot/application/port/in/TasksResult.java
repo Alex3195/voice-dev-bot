@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Faol project tasklari (GitLab Issue) bilan amallar natijasi. */
+/** Faol project tasklari (Issue) bilan amallar natijasi. */
 public sealed interface TasksResult
     permits TasksResult.Overview,
         TasksResult.Page,

@@ -227,7 +227,7 @@ public class TaskDialog {
     return describe(result);
   }
 
-  /** Bazadagi bog'lanish bo'yicha (GitLab'ga so'rovsiz) — sarlavha so'rashdan oldin. */
+  /** Bazadagi bog'lanish bo'yicha (xizmatga so'rovsiz) — sarlavha so'rashdan oldin. */
   private Optional<Screen> withRepo(
       TelegramUserId user, Function<RepoLinkResult.Linked, Optional<Screen>> action) {
     return switch (repos.show(user)) {

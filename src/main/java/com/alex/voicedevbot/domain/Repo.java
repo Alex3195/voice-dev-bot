@@ -4,7 +4,7 @@ import java.net.URI;
 import java.util.Objects;
 
 /**
- * GitLab'dagi repo (project).
+ * Kod xizmatidagi repo (GitLab project, GitHub repository).
  *
  * @param path namespace bilan to'liq yo'l, masalan {@code alex/elt-imzo}
  */

@@ -4,11 +4,11 @@ import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ConnectionResult;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
 import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
-import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.port.out.ConnectionRepository;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.AccessToken;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TelegramUserId;
@@ -23,14 +23,17 @@ public class ManageConnectionsService implements ManageConnectionsUseCase {
 
   private final AccessPolicy accessPolicy;
   private final ConnectionRepository connections;
-  private final CodeHost gitLab;
+  private final Integrations integrations;
   private final Clock clock;
 
   public ManageConnectionsService(
-      AccessPolicy accessPolicy, ConnectionRepository connections, CodeHost gitLab, Clock clock) {
+      AccessPolicy accessPolicy,
+      ConnectionRepository connections,
+      Integrations integrations,
+      Clock clock) {
     this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy");
     this.connections = Objects.requireNonNull(connections, "connections");
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
+    this.integrations = Objects.requireNonNull(integrations, "integrations");
     this.clock = Objects.requireNonNull(clock, "clock");
   }
 
@@ -39,7 +42,8 @@ public class ManageConnectionsService implements ManageConnectionsUseCase {
     if (!accessPolicy.isAllowed(user)) {
       return new ConnectionResult.AccessDenied();
     }
-    return new ConnectionResult.Listed(connections.findAll().stream().map(this::view).toList());
+    return new ConnectionResult.Listed(
+        connections.findAll().stream().map(this::view).toList(), integrations.supported());
   }
 
   @Override
@@ -54,17 +58,17 @@ public class ManageConnectionsService implements ManageConnectionsUseCase {
   }
 
   @Override
-  public ConnectionResult add(TelegramUserId user, String address, String token) {
+  public ConnectionResult add(
+      TelegramUserId user, Provider provider, String address, String token) {
     if (!accessPolicy.isAllowed(user)) {
       return new ConnectionResult.AccessDenied();
     }
-    ServerAddress parsed;
-    try {
-      parsed = ServerAddress.parse(address);
-    } catch (IllegalArgumentException e) {
-      return new ConnectionResult.Rejected(ConnectionProblem.INVALID_ADDRESS);
+    if (!integrations.supports(provider)) {
+      return new ConnectionResult.Rejected(ConnectionProblem.UNSUPPORTED);
     }
-    return verifyAndSave(parsed, token, Optional.empty());
+    return addressOf(provider, address)
+        .map(parsed -> verifyAndSave(provider, parsed, token, Optional.empty()))
+        .orElseGet(() -> new ConnectionResult.Rejected(ConnectionProblem.INVALID_ADDRESS));
   }
 
   @Override
@@ -74,7 +78,10 @@ public class ManageConnectionsService implements ManageConnectionsUseCase {
     }
     return connections
         .find(connectionId)
-        .map(existing -> verifyAndSave(existing.address(), token, Optional.of(existing)))
+        .map(
+            existing ->
+                verifyAndSave(
+                    existing.provider(), existing.address(), token, Optional.of(existing)))
         .orElseGet(() -> new ConnectionResult.Rejected(ConnectionProblem.NOT_FOUND));
   }
 
@@ -87,8 +94,26 @@ public class ManageConnectionsService implements ManageConnectionsUseCase {
     return new ConnectionResult.Removed();
   }
 
+  /** Bo'sh manzil — standart server; self-hosted bo'lmaydigan xizmatda faqat standart server. */
+  private static Optional<ServerAddress> addressOf(Provider provider, String address) {
+    if (address == null || address.isBlank()) {
+      return Optional.of(provider.defaultAddress());
+    }
+    try {
+      ServerAddress parsed = ServerAddress.parse(address);
+      return provider.selfHosted() || parsed.equals(provider.defaultAddress())
+          ? Optional.of(parsed)
+          : Optional.empty();
+    } catch (IllegalArgumentException e) {
+      return Optional.empty();
+    }
+  }
+
   private ConnectionResult verifyAndSave(
-      ServerAddress address, String rawToken, Optional<ProviderConnection> renewing) {
+      Provider provider,
+      ServerAddress address,
+      String rawToken,
+      Optional<ProviderConnection> renewing) {
     AccessToken token;
     try {
       token = new AccessToken(rawToken);
@@ -97,20 +122,20 @@ public class ManageConnectionsService implements ManageConnectionsUseCase {
     }
     TokenInfo info;
     try {
-      info = gitLab.verify(address, token);
+      info = integrations.codeHost(provider).verify(address, token);
     } catch (IntegrationException e) {
       return new ConnectionResult.Rejected(ConnectionProblems.of(e));
     }
-    Optional<ConnectionProblem> problem = problemWith(info, renewing);
+    Optional<ConnectionProblem> problem = problemWith(provider, info, renewing);
     if (problem.isPresent()) {
       return new ConnectionResult.Rejected(problem.get());
     }
-    return new ConnectionResult.Saved(view(connections.save(address, token, info)));
+    return new ConnectionResult.Saved(view(connections.save(provider, address, token, info)));
   }
 
   private Optional<ConnectionProblem> problemWith(
-      TokenInfo info, Optional<ProviderConnection> renewing) {
-    if (!info.hasRequiredScope()) {
+      Provider provider, TokenInfo info, Optional<ProviderConnection> renewing) {
+    if (provider.requiredScope().filter(scope -> !info.hasScope(scope)).isPresent()) {
       return Optional.of(ConnectionProblem.MISSING_SCOPE);
     }
     if (info.status(today()) == TokenStatus.EXPIRED) {

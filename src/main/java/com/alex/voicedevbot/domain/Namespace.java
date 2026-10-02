@@ -1,7 +1,8 @@
 package com.alex.voicedevbot.domain;
 
 /**
- * Repo yaratish mumkin bo'lgan joy: foydalanuvchining shaxsiy namespace'i yoki guruh.
+ * Repo yaratish mumkin bo'lgan joy: foydalanuvchining shaxsiy namespace'i yoki guruh (GitHub'da
+ * tashkilot).
  *
  * @param path masalan {@code alex} yoki {@code akfa/backend}
  */

@@ -7,14 +7,15 @@ import com.alex.voicedevbot.domain.RepoLink;
 import java.util.List;
 import java.util.Objects;
 
-/** Faol project ↔ GitLab repo amallari natijasi. */
+/** Faol project ↔ repo amallari natijasi. */
 public sealed interface RepoLinkResult {
 
   record Linked(ProjectName project, RepoLink link, ConnectionView connection)
       implements RepoLinkResult {}
 
   /**
-   * @param connections repo tanlash uchun mavjud ulanishlar; bo'sh bo'lsa avval GitLab ulash kerak
+   * @param connections repo tanlash uchun mavjud ulanishlar; bo'sh bo'lsa avval ulanish qo'shish
+   *     kerak
    */
   record NotLinked(ProjectName project, List<ConnectionView> connections)
       implements RepoLinkResult {
@@ -39,7 +40,7 @@ public sealed interface RepoLinkResult {
     }
   }
 
-  /** Token tugagan yoki GitLab uni rad etdi — amal o'rniga tokenni yangilash taklif qilinadi. */
+  /** Token tugagan yoki xizmat uni rad etdi — amal o'rniga tokenni yangilash taklif qilinadi. */
   record NeedsNewToken(ConnectionView connection) implements RepoLinkResult {}
 
   record Failed(ConnectionProblem problem) implements RepoLinkResult {}

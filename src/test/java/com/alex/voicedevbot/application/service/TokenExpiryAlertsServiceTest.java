@@ -4,6 +4,7 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.alex.voicedevbot.application.port.in.ConnectionView;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenStatus;
 import com.alex.voicedevbot.support.GitLabFixtures;
@@ -24,11 +25,17 @@ class TokenExpiryAlertsServiceTest {
 
   @Test
   void should_alert_expiring_and_expired_tokens_once_per_day() {
-    connections.save(ServerAddress.parse("a.uz"), TOKEN, GitLabFixtures.VALID);
+    connections.save(Provider.GITLAB, ServerAddress.parse("a.uz"), TOKEN, GitLabFixtures.VALID);
     connections.save(
-        ServerAddress.parse("b.uz"), TOKEN, GitLabFixtures.expiringOn(LocalDate.of(2026, 10, 5)));
+        Provider.GITLAB,
+        ServerAddress.parse("b.uz"),
+        TOKEN,
+        GitLabFixtures.expiringOn(LocalDate.of(2026, 10, 5)));
     connections.save(
-        ServerAddress.parse("c.uz"), TOKEN, GitLabFixtures.expiringOn(LocalDate.of(2026, 9, 1)));
+        Provider.GITLAB,
+        ServerAddress.parse("c.uz"),
+        TOKEN,
+        GitLabFixtures.expiringOn(LocalDate.of(2026, 9, 1)));
 
     var first = serviceOn(GitLabFixtures.TODAY).dueAlerts();
     var sameDay = serviceOn(GitLabFixtures.TODAY).dueAlerts();

@@ -1,10 +1,10 @@
 package com.alex.voicedevbot.application.port.in;
 
-/** GitLab amali nima uchun bajarilmadi — foydalanuvchiga tushunarli sabab. */
+/** Ulanish yoki xizmat amali nima uchun bajarilmadi — foydalanuvchiga tushunarli sabab. */
 public enum ConnectionProblem {
   INVALID_ADDRESS,
   INVALID_TOKEN_FORMAT,
-  /** GitLab tokenni tanimadi (noto'g'ri, bekor qilingan). */
+  /** Xizmat tokenni tanimadi (noto'g'ri, bekor qilingan). */
   TOKEN_REJECTED,
   MISSING_SCOPE,
   TOKEN_EXPIRED,
@@ -14,5 +14,7 @@ public enum ConnectionProblem {
   FORBIDDEN,
   NOT_FOUND,
   INVALID_REPO_NAME,
-  REPO_EXISTS
+  REPO_EXISTS,
+  /** Bu xizmat uchun bot adapteri hali yo'q. */
+  UNSUPPORTED
 }

@@ -45,7 +45,6 @@ class ConnectionDomainTest {
 
     assertThat(address.uri()).isEqualTo(URI.create(uri));
     assertThat(address.label()).isEqualTo(label);
-    assertThat(address.api("/user")).isEqualTo(URI.create(uri + "/api/v4/user"));
   }
 
   @ParameterizedTest
@@ -84,9 +83,8 @@ class ConnectionDomainTest {
 
     assertThat(info.status(TODAY)).isEqualTo(TokenStatus.ACTIVE);
     assertThat(info.expiresAt()).isEmpty();
-    assertThat(info.hasRequiredScope()).isFalse();
-    assertThat(TokenInfo.withoutExpiry("alex", Set.of("api", "read_user")).hasRequiredScope())
-        .isTrue();
+    assertThat(info.hasScope("api")).isFalse();
+    assertThat(info.hasScope("read_api")).isTrue();
   }
 
   @Test
@@ -107,6 +105,7 @@ class ConnectionDomainTest {
     ProviderConnection connection =
         new ProviderConnection(
             1,
+            Provider.GITLAB,
             ServerAddress.GITLAB_COM,
             new AccessToken("glpat-12345678"),
             TokenInfo.withoutExpiry("alex", Set.of("api")));
@@ -117,5 +116,42 @@ class ConnectionDomainTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new Namespace(1, "", true))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void should_describe_providers() {
+    assertThat(Provider.GITLAB.defaultAddress()).isEqualTo(ServerAddress.GITLAB_COM);
+    assertThat(Provider.GITLAB.selfHosted()).isTrue();
+    assertThat(Provider.GITLAB.requiredScope()).contains("api");
+    assertThat(Provider.GITHUB.defaultAddress().label()).isEqualTo("github.com");
+    assertThat(Provider.GITHUB.selfHosted()).isFalse();
+    assertThat(Provider.GITHUB.displayName()).isEqualTo("GitHub");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"GITLAB, api, true", "GITLAB, read_api, false", "GITHUB, read_api, true"})
+  void should_check_scope_required_by_provider(Provider provider, String scope, boolean enough) {
+    ProviderConnection connection =
+        new ProviderConnection(
+            1,
+            provider,
+            provider.defaultAddress(),
+            new AccessToken("glpat-12345678"),
+            TokenInfo.withoutExpiry("alex", Set.of(scope)));
+
+    assertThat(connection.hasRequiredScope()).isEqualTo(enough);
+  }
+
+  @Test
+  void should_require_provider_for_connection() {
+    assertThatThrownBy(
+            () ->
+                new ProviderConnection(
+                    1,
+                    null,
+                    ServerAddress.GITLAB_COM,
+                    new AccessToken("glpat-12345678"),
+                    TokenInfo.withoutExpiry("alex", Set.of("api"))))
+        .isInstanceOf(NullPointerException.class);
   }
 }
