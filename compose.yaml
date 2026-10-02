@@ -1,0 +1,48 @@
+# whisper.cpp STT server (serverda). Dev'da native ishlating: scripts/whisper-dev.sh
+#
+#   docker compose --profile gpu up -d   # Windows + NVIDIA (RTX 3060)
+#   docker compose --profile cpu up -d   # GPU'siz mashina (Apple Silicon'da amd64 emulyatsiya — sekin)
+#
+# Ikkala profil ham bir xil API va portni beradi, bot uchun faqat STT_WHISPER_URL farq qiladi.
+
+x-whisper: &whisper
+  restart: unless-stopped
+  # Image entrypoint'i `bash -c` — buyruq bitta satr bo'lishi shart, aks holda argumentlar yo'qoladi
+  command:
+    - >-
+      whisper-server
+      --model /models/${WHISPER_MODEL:-ggml-large-v3-turbo-q5_0.bin}
+      --host 0.0.0.0 --port 8080
+      --language ${STT_WHISPER_LANGUAGE:-uz}
+      --convert
+  volumes:
+    - ${WHISPER_MODELS_DIR:-./models}:/models:ro
+  ports:
+    # Tashqi mashinadan (Tailscale) ulanish uchun WHISPER_BIND=<tailscale IP>
+    - "${WHISPER_BIND:-127.0.0.1}:${WHISPER_PORT:-8178}:8080"
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+    interval: 30s
+    timeout: 5s
+    start_period: 120s
+    retries: 3
+
+services:
+  whisper-gpu:
+    <<: *whisper
+    image: ghcr.io/ggml-org/whisper.cpp:main-cuda
+    profiles: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  whisper-cpu:
+    <<: *whisper
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    # Rasmiy image faqat amd64; Apple Silicon'da emulyatsiya bilan ishlaydi
+    platform: linux/amd64
+    profiles: [cpu]

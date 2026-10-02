@@ -23,7 +23,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 
 ## Oqim
 1. Telegram bot voice xabarni qabul qiladi (faqat whitelist'dagi Telegram ID).
-2. STT: `transcribe(audio) -> text` interface orqasida (faster-whisper, `language="uz"`). Dvigatel almashtirilishi oson bo'lsin (lokal Whisper yoki tashqi API).
+2. STT: `transcribe(audio) -> text` interface orqasida (whisper.cpp server, `language="uz"`). Dvigatel almashtirilishi oson bo'lsin (lokal Whisper yoki tashqi API).
 3. LLM (Claude API) matnni JSON'ga aylantiradi: `{project, title, description, acceptance_criteria, type}`; Whisper xatolarini ham tuzatadi.
 4. Bot natijani ko'rsatadi, inline tugma bilan tasdiqlanadi (✅ / ✏️). Tasdiqsiz hech narsa yaratilmaydi.
 5. Tasdiqlansa GitHub Issue (yoki Jira) yaratiladi, `ai-task` label bilan.
@@ -52,7 +52,10 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 - CI uchun til bo'yicha reusable workflow shablonlari (java, node, flutter) markaziy repo'da.
 
 ## Infratuzilma qarorlari
-- Whisper uy kompyuterida (Windows, RTX 3060 8 GB): `faster-whisper`, `large-v3` yoki `large-v3-turbo`, `device="cuda"`, `compute_type="int8_float16"`, `language="uz"`. Model bir marta yuklanadi, so'rovlar navbat bilan.
+- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-turbo-q5_0` (yoki `large-v3-q5_0`), `language=uz`. Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
+- Server: uy kompyuterida (Windows, RTX 3060 8 GB) Docker'da — `docker compose --profile gpu up -d` (`compose.yaml`, rasmiy `whisper.cpp:main-cuda` image). Model bir marta yuklanadi.
+- Dev (Mac): native `whisper-server` (Metal GPU, Docker'dan ~70x tez) — `scripts/whisper-dev.sh`. Rasmiy image arm64 uchun yo'q.
+- Dev va server farqi faqat bitta sozlama: `STT_WHISPER_URL`.
 - Telegram: long polling (ochiq port/domen kerak emas).
 - Masofadan boshqarish: Tailscale + OpenSSH (faqat kalit bilan). Servislar NSSM/Task Scheduler "At startup".
 - AWS free tier'da Whisper ishlatilmaydi (RAM yetmaydi); kerak bo'lsa faqat bot u yerda, STT uyda (Tailscale orqali).
@@ -72,7 +75,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 4. Prod'ga qo'lda tasdiq bilan chiqarish
 
 ## Holat
-- 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT hozircha `StubSpeechToText` (Whisper adapteri keyingi task).
-- Keyingi: Whisper adapteri → `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
+- 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT — `WhisperCppSpeechToText` (whisper.cpp server); `STT_ENGINE=stub` bilan Whisper'siz ishlatish mumkin.
+- Keyingi: `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
 - Ma'lum muammo: TelegramBots 10.3 `downloadFileAsStream` API manzilini e'tiborsiz qoldiradi va HTTP statusni tekshirmaydi — shuning uchun `TelegramAudioSource` faylni `java.net.http.HttpClient` bilan o'zi yuklaydi.
 - Claude GitHub App'iga bu private repo uchun yozish ruxsati berilmagan (push rad etilgan); kod IntelliJ/VS Code'da lokal yoziladi va o'zingiz push qilasiz yoki ruxsat berasiz.

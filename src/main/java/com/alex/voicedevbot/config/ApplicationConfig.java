@@ -1,6 +1,5 @@
 package com.alex.voicedevbot.config;
 
-import com.alex.voicedevbot.adapter.out.stt.StubSpeechToText;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
 import com.alex.voicedevbot.application.port.out.AudioSource;
 import com.alex.voicedevbot.application.port.out.SpeechToText;
@@ -23,11 +22,6 @@ class ApplicationConfig {
         properties.allowedUserIds().stream()
             .map(TelegramUserId::new)
             .collect(Collectors.toUnmodifiableSet()));
-  }
-
-  @Bean
-  SpeechToText speechToText() {
-    return new StubSpeechToText();
   }
 
   @Bean

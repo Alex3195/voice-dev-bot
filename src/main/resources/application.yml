@@ -9,3 +9,10 @@ bot:
   allowed-user-ids: ${TELEGRAM_ALLOWED_USER_IDS:}
   api-url: ${BOT_API_URL:https://api.telegram.org}
   polling-enabled: ${BOT_POLLING_ENABLED:true}
+
+stt:
+  engine: ${STT_ENGINE:whisper-cpp}
+  whisper:
+    url: ${STT_WHISPER_URL:http://127.0.0.1:8178}
+    language: ${STT_WHISPER_LANGUAGE:uz}
+    timeout: ${STT_WHISPER_TIMEOUT:120s}

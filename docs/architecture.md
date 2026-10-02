@@ -38,7 +38,7 @@ Telegram Update
       HandleVoiceMessageService:
         1. AccessPolicy.isAllowed(sender)    (whitelist — yuklab olishdan OLDIN)
         2. AudioSource.fetch(ref)            → adapter/out/telegram/TelegramAudioSource
-        3. SpeechToText.transcribe(audio)    → adapter/out/stt/StubSpeechToText
+        3. SpeechToText.transcribe(audio)    → adapter/out/stt/WhisperCppSpeechToText  (STT_ENGINE=stub → StubSpeechToText)
   ← VoiceHandlingResult (sealed: Transcribed | AccessDenied)
   → VoiceDevBot javob yuboradi
 ```
