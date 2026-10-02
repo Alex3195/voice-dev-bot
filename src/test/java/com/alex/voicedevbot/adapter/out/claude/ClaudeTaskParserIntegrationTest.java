@@ -217,6 +217,24 @@ class ClaudeTaskParserIntegrationTest {
   }
 
   @Test
+  void should_recognize_exhausted_credit() {
+    claude.stubFor(
+        post(urlPathEqualTo("/v1/messages"))
+            .willReturn(
+                aResponse()
+                    .withStatus(400)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody(
+                        "{\"type\": \"error\", \"error\": {\"type\": \"invalid_request_error\","
+                            + " \"message\": \"Your credit balance is too low to access the"
+                            + " Anthropic API.\"}}")));
+
+    assertThatThrownBy(() -> parser.parse(request(OPUS)))
+        .isInstanceOfSatisfying(
+            LanguageModelException.class, e -> assertThat(e.reason()).isEqualTo(Reason.NO_CREDIT));
+  }
+
+  @Test
   void should_report_unreachable_server() {
     AnthropicClient offline =
         AnthropicOkHttpClient.builder()

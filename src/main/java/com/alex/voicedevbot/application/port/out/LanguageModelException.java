@@ -10,6 +10,8 @@ public class LanguageModelException extends RuntimeException {
     NOT_CONFIGURED,
     /** Kalit noto'g'ri yoki ruxsat yo'q (HTTP 401/403). */
     UNAUTHORIZED,
+    /** Anthropic hisobida kredit tugagan. */
+    NO_CREDIT,
     /** Tanlangan model yo'q yoki bu so'rovni qo'llamaydi. */
     MODEL_UNAVAILABLE,
     /** Xavfsizlik filtri so'rovni rad etdi. */
