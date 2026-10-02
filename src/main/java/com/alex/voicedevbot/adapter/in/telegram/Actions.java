@@ -16,6 +16,10 @@ import java.util.Locale;
 final class Actions {
 
   static final String NEW_MESSAGE = "+";
+
+  /** Ish davom etayotgan tugma — bosilsa hech narsa qilmaydi. */
+  static final String BUSY = "busy";
+
   static final String HOME = "home";
   static final String HELP = "help";
   static final String PROJECTS = "projects";
