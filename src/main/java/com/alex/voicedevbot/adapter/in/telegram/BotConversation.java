@@ -156,6 +156,16 @@ public class BotConversation {
     return screenFor(user, action).map(screen -> new Reply(screen, asNewMessage, ""));
   }
 
+  /**
+   * Bir necha soniya ishlaydigan tugma (Claude): bosilishi bilan ko'rsatiladigan bildirishnoma —
+   * tugma shu matnga almashadi va ish tugaguncha bosilmaydi.
+   */
+  Optional<String> progress(String data) {
+    String action =
+        data.startsWith(Actions.NEW_MESSAGE) ? data.substring(Actions.NEW_MESSAGE.length()) : data;
+    return TaskDialog.isSlow(action) ? Optional.of(TaskDialog.DRAFTING) : Optional.empty();
+  }
+
   /** Bot token kutyapti — foydalanuvchi yozgan xabar chatdan o'chirilishi kerak. */
   boolean expectsSecret(TelegramUserId user) {
     return connections.expectsSecret(user);

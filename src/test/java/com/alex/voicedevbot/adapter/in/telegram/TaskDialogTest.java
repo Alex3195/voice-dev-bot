@@ -5,10 +5,12 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,6 +75,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -467,6 +470,59 @@ class TaskDialogTest {
     assertThat(projects.find(ELT_IMZO).orElseThrow().glossary().terms()).containsExactly("Klaes");
     assertThat(edited.html()).contains("<b>Muddatni ko'rsatish</b>").contains("🤖 <i>Claude</i>");
     verify(api).createIssue(connection, REPO, expected, LABELS);
+  }
+
+  @Test
+  void should_not_spend_tokens_again_when_button_is_pressed_twice() {
+    // given
+    long id = loggedTranscript("elt imza sahifasida muddat chiqsin");
+    String button = Actions.taskFromTranscript(id);
+    AtomicReference<Optional<Reply>> pressedWhileWaiting = new AtomicReference<>();
+    doAnswer(
+            invocation -> {
+              pressedWhileWaiting.set(conversation.onButton(USER, button));
+              return new TaskParser.ParsedTask(
+                  new TaskDraft(
+                      "Muddatni ko'rsatish",
+                      "Muddat ko'rinsin.",
+                      List.of(),
+                      TaskType.FEATURE,
+                      List.of(),
+                      "Muddat."),
+                  Optional.empty(),
+                  new LlmUsage(new ModelId("claude-opus-5-5"), 1, 0, 0, 1));
+            })
+        .when(parser)
+        .parse(any());
+
+    // when
+    Screen first = press(button).screen();
+    Screen again = press(button).screen();
+
+    // then
+    assertThat(pressedWhileWaiting.get()).isEmpty();
+    assertThat(again.html()).isEqualTo(first.html());
+    verify(parser, times(1)).parse(any());
+    assertThat(conversation.progress(button)).contains(TaskDialog.DRAFTING);
+    assertThat(conversation.progress(Actions.TASKS)).isEmpty();
+  }
+
+  @Test
+  void should_retry_claude_when_previous_attempt_fell_back_to_plain_draft() {
+    doThrow(
+            new LanguageModelException(
+                LanguageModelException.Reason.NO_CREDIT,
+                "Anthropic credit balance is too low",
+                null))
+        .when(parser)
+        .parse(any());
+    long id = loggedTranscript("Login sahifasini tuzat");
+
+    Screen first = press(Actions.taskFromTranscript(id)).screen();
+    press(Actions.taskFromTranscript(id));
+
+    assertThat(first.html()).startsWith("💳 Anthropic hisobida kredit tugagan");
+    verify(parser, times(2)).parse(any());
   }
 
   @Test
