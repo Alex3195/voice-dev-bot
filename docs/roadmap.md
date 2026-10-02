@@ -17,12 +17,13 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 | #7 | ✅ Tasklar (Issue'lar holat bo'yicha guruhlab, yaratish/yopish, transkriptdan task) va 📄 Hujjatlar (PR E) |
 | #9 | Ulanishlar bir nechta provayder uchun: `🔗 Ulanishlar`, `CodeHost` / `IssueTracker`, V4 migratsiya (PR F) |
 | #10 | GitHub (github.com): token, repo'lar, hujjatlar, Issues, PR'lar (PR H) |
+| #12 | Repo'ni havola bilan ulash: server mavjud ulanishlardan topiladi, kerak bo'lsa token so'raladi (PR G) |
 
 Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
 D esa ovozdan task yaratishni qo'shadi. C va E tayyor.
 
-Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F va H tayyor —
-**keyingisi G** (repo'ni URL bilan ulash, GitLab va GitHub uchun birdan), keyin D (ovozdan task).
+Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F, H va G tayyor —
+**keyingisi D** (ovozdan task).
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -91,14 +92,17 @@ Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan old
 - Qaror: `SECRETS_KEY` (tokenlarni shifrlash kaliti) `.env`da qoladi — bir marta, `openssl rand -base64 32`;
   kalit bazada bo'lsa shifrlash ma'nosiz. Git tokenlarining o'zi — faqat Settings orqali, bazada.
 
-## PR G — Repo'ni URL bilan ulash (keyingi)
+## PR G — Repo'ni URL bilan ulash (tayyor, #12)
 
-- [ ] Repo URL yuboriladi → bot provayder (GitLab/GitHub), server va repo yo'lini o'zi aniqlaydi
-      (`https://github.com/egasi/nomi`, `https://git.firma.uz/guruh/ichki/nomi`, `.git` va `/-/…` qismlari bilan ham).
-      Self-hosted server qaysi provayder ekanini bilish uchun avval mavjud ulanishlar tekshiriladi.
-- [ ] O'sha server uchun faol token bo'lsa — darhol ulanadi; yo'q yoki tugagan bo'lsa — token so'raladi,
-      tekshiriladi, saqlanadi (muddati tugaguncha ishlatiladi), keyin repo ulanadi.
-- [ ] Ro'yxatdan tanlash va yangi repo yaratish ham qoladi.
+- [x] Repo URL yuboriladi (`🔗 Havola bilan ulash`) → bot server va repo yo'lini o'zi aniqlaydi
+      (`https://github.com/egasi/nomi`, `https://git.firma.uz/guruh/ichki/nomi`, `.git`, `/-/…`, GitHub `/tree/…`
+      va SSH `git@host:…` shakli bilan ham). Avval mavjud ulanishlar tekshiriladi (yo'li bor self-hosted ham).
+- [x] O'sha serverdagi faol tokenlar navbat bilan sinaladi — repo qaysi birida ko'rinsa, o'sha bilan ulanadi.
+      Ulanish yo'q bo'lsa: gitlab.com / github.com — darhol token so'raladi; **notanish server provayderi taxmin
+      qilinmaydi** — server o'z nomi bilan ko'rsatiladi va foydalanuvchi xizmatni tanlaydi (o'z serveriga
+      o'rnatiladiganlardan; hozir GitLab). Token tugagan bo'lsa — yangilash; token saqlangach repo avtomatik ulanadi.
+- [x] Ro'yxatdan tanlash va yangi repo yaratish ham qoladi.
+- [ ] Havola bilan ulashda token rad etilsa havola unutiladi — qayta yuborish kerak (keyin tuzatiladi).
 
 ## PR H — GitHub (github.com) (tayyor, #10)
 
