@@ -17,7 +17,10 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 | #7 | ✅ Tasklar (Issue'lar holat bo'yicha guruhlab, yaratish/yopish, transkriptdan task) va 📄 Hujjatlar (PR E) |
 
 Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
-D esa ovozdan task yaratishni qo'shadi. C va E tayyor — **keyingisi D**.
+D esa ovozdan task yaratishni qo'shadi. C va E tayyor.
+
+Keyingi tartib: **F → G → H → D**. Ulanishlar umumiy bo'ladi (GitLab, GitHub, keyin Jira), repo URL bilan
+ulanadi, keyin GitHub qo'shiladi va shundan so'ng ovozdan task (D).
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -74,6 +77,29 @@ D esa ovozdan task yaratishni qo'shadi. C va E tayyor — **keyingisi D**.
       `docs/roadmap.md`, `docs/decisions/NNN-*.md` (qarorlar, ADR), `docs/specs/NNN-*.md` (TZ/spetsifikatsiya),
       `CLAUDE.md`. Uzun hujjat bo'laklab ko'rsatiladi.
 
+## PR F — Ulanishlar: bir nechta provayder
+
+- [ ] Har ulanishda provayder turi bor: GitLab, GitHub, keyin Jira. Bitta ulanish (server + token egasi) shu
+      serverdagi **barcha projectlar** uchun ishlatiladi — token har project uchun qayta so'ralmaydi.
+- [ ] `⚙️ Sozlamalar → 🔗 Ulanishlar`: hamma provayderlar bitta ro'yxatda — holati (🟢 faol · ⚠️ tugayapti ·
+      ⛔ tugagan) va tugash sanasi bilan; ➕ qo'shish, 🔑 yangilash, 🗑 o'chirish.
+- [ ] Port ikkiga bo'linadi: `CodeHost` (repo, fayllar, MR/PR) va `IssueTracker` (tasklar). Jira faqat
+      `IssueTracker` bo'ladi — project kodi bir joyda, tasklari boshqa joyda bo'lishi mumkin.
+- [ ] Mavjud GitLab ulanishlari migratsiya bilan saqlanadi.
+
+## PR G — Repo'ni URL bilan ulash
+
+- [ ] Repo URL yuboriladi → bot provayder, server va repo yo'lini o'zi aniqlaydi.
+- [ ] O'sha server uchun faol token bo'lsa — darhol ulanadi; yo'q yoki tugagan bo'lsa — token so'raladi,
+      tekshiriladi, saqlanadi (muddati tugaguncha ishlatiladi), keyin repo ulanadi.
+- [ ] Ro'yxatdan tanlash va yangi repo yaratish ham qoladi.
+
+## PR H — GitHub (github.com)
+
+- [ ] GitHub token (fine-grained yoki classic `repo`), tekshirish va muddat — GitLab kabi.
+- [ ] Repo'lar, hujjatlar, Issues (tasklar) va Pull Request'lar.
+- [ ] GitHub Enterprise — hozircha yo'q, keyin qo'shilishi mumkin.
+
 ## PR D — Claude TaskParser
 
 - [ ] SDK: `com.anthropic:anthropic-java` (yangi dependency — ruxsat bilan). Kalit: `ANTHROPIC_API_KEY` `.env`da.
@@ -103,6 +129,10 @@ D esa ovozdan task yaratishni qo'shadi. C va E tayyor — **keyingisi D**.
 - [ ] Har chaqiruvning `usage`i (input, cache read/write, output) jurnalga — har task narxi ko'rinadi.
 
 ## Keyin
+
+- **Jira** — faqat tasklar uchun (`IssueTracker`); Cloud yoki Server, project ↔ Jira loyiha bog'lanishi — boshlashdan
+  oldin aniqlanadi.
+- GitHub Enterprise (self-hosted GitHub).
 
 - GitLab CI + Claude Code headless: `ai-task` label → agent feature branch'da kod yozadi → MR → CI → staging.
 - Prod'ga faqat qo'lda tasdiq bilan (GitLab protected environments).
