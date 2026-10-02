@@ -13,9 +13,11 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 | #1, #2 | whisper.cpp STT (dev: native, server: Docker GPU/CPU), large-v3 + beam 5 + lotin prompt; voice, audio fayl, video, video xabar, audio/video hujjat (20 MB) |
 | #3 | Projectlar, lug'at, foydalanuvchi tili (PostgreSQL + Flyway, oddiy JDBC); inline tugmali interfeys (`BotConversation` + `BotScreens`), `/` menyu |
 | #5 | Transkripsiya jurnali + audio arxivi, project kartochkasi, ⚙️ Sozlamalar (PR B) |
+| #6 | GitLab ulanishlari (shifrlangan token, muddat ogohlantirishi), project ↔ repo (PR C) |
+| #7 | ✅ Tasklar (Issue'lar holat bo'yicha guruhlab, yaratish/yopish, transkriptdan task) va 📄 Hujjatlar (PR E) |
 
 Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
-D esa ovozdan task yaratishni qo'shadi.
+D esa ovozdan task yaratishni qo'shadi. C va E tayyor — **keyingisi D**.
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -57,14 +59,18 @@ D esa ovozdan task yaratishni qo'shadi.
       (`CLAUDE.md`, `.ai/criteria.yml`, `.ai/task-template.md` shablonlari bilan;
       `Alex3195/ai-agent-workflow` asos bo'la oladi) / `⏭ Keyinroq`.
 
-## PR E — Tasklar va Hujjatlar bo'limlari
+## PR E — Tasklar va Hujjatlar bo'limlari (tayyor, #7)
 
-- [ ] **✅ Tasklar** (project kartochkasida): project repo'sidagi GitLab Issue'lar, sahifalab. Holat GitLab'dagi
-      haqiqiy holatdan: 🟢 ochiq · 🔀 MR ochilgan · ✅ MR merge bo'lgan · ⚪ yopiq.
-- [ ] `➕ Yangi task` — sarlavha + tavsif (matn bilan), tasdiqdan keyin Issue (`ai-task` label). Transkript
-      ostida `✅ Task yaratish` (PR D'gacha — xom matn bilan, PR D'dan keyin Claude bilan).
-- [ ] Task ichida: tavsif, MR havolasi, `✔️ Yopish` / `↩️ Qayta ochish`.
-- [ ] **📄 Hujjatlar** — project repo'sidan o'qiladi (botda nusxa yo'q, repo yagona manba). Standart tuzilma:
+- [x] **✅ Tasklar** (project kartochkasida): project repo'sidagi barcha GitLab Issue'lar **holat bo'yicha
+      guruhlab**, har guruh soni bilan, ichida sahifalab. Holat GitLab'dagi haqiqiy holatdan:
+      ⏰ muddati o'tgan · 🟢 ochiq · 🔀 MR ochilgan · ✅ bajarilgan (MR bilan yopilgan) · ⚪ yopiq.
+      Ro'yxat bitta so'rov bilan (`merge_requests_count`, oxirgi 300 ta); MR'ning aniq holati task ochilganda.
+- [x] `➕ Yangi task` — sarlavha + tavsif (matn bilan), tasdiqdan keyin Issue (`ai-task` label). Transkript
+      ostida `✅ Task yaratish` (PR D'gacha — birinchi gap sarlavha, to'liq matn tavsif; PR D'dan keyin Claude
+      bilan). Tasdiq ekranida `✏️ Sarlavha` / `✏️ Tavsif`.
+- [x] Task ichida: tavsif, MR havolasi, `✔️ Yopish` / `↩️ Qayta ochish`.
+- [ ] Task'ga muddat (`due_date`) qo'yish botdan — hozircha faqat GitLab'da.
+- [x] **📄 Hujjatlar** — project repo'sidan o'qiladi (botda nusxa yo'q, repo yagona manba). Standart tuzilma:
       `docs/roadmap.md`, `docs/decisions/NNN-*.md` (qarorlar, ADR), `docs/specs/NNN-*.md` (TZ/spetsifikatsiya),
       `CLAUDE.md`. Uzun hujjat bo'laklab ko'rsatiladi.
 

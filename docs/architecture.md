@@ -45,14 +45,17 @@ Telegram Update
         5. TranscriptJournal (xatosi oqimni to'xtatmaydi, faqat log)
              AudioArchive.store   → adapter/out/archive/DiskAudioArchive
              TranscriptionLog.append → adapter/out/persistence/JdbcTranscriptionLog
-  ← VoiceHandlingResult (sealed: Transcribed | AccessDenied)
+  ← VoiceHandlingResult (sealed: Transcribed(matn, jurnal raqami) | AccessDenied)
   → VoiceDevBot javob yuboradi
 
 Telegram matn / "/buyruq" / inline tugma
   → adapter/in/telegram/BotConversation       (ekranlar: BotScreens)
       GitLab tugmalari ("gl…") va kutilayotgan kiritish → GitLabDialog (ekranlar: GitLabScreens)
+      Tasklar ("tk…", yangi task qoralamasi) → TaskDialog (TaskScreens); hujjatlar ("dc…") → DocsDialog (DocScreens)
   → ManageProjectsUseCase | ManageGlossaryUseCase | ChangeLanguageUseCase | BrowseTranscriptsUseCase
-    | ManageGitLabUseCase | LinkRepoUseCase                    (har biri whitelist'ni tekshiradi)
+    | ManageGitLabUseCase | LinkRepoUseCase | ManageTasksUseCase | BrowseDocsUseCase
+                                                               (har biri whitelist'ni tekshiradi)
+      Tasklar va hujjatlar → ProjectRepoAccess (whitelist, faol project, repo, token; xato → RepoUnavailable)
       GitLabApi → adapter/out/gitlab/GitLabHttpApi (REST v4, PRIVATE-TOKEN)
       GitLabConnectionRepository → JdbcGitLabConnectionRepository (token: TokenCipher, AES-GCM)
       ProjectRepoLinks → JdbcProjectRepoLinks; RepoTemplate → adapter/out/template/ClasspathRepoTemplate
