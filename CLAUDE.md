@@ -52,7 +52,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 - CI uchun til bo'yicha reusable workflow shablonlari (java, node, flutter) markaziy repo'da.
 
 ## Infratuzilma qarorlari
-- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda `STT_WHISPER_PROMPT` (lotin namunasi + atamalar lug'ati — usiz matn kirill/turkcha imloga o'tib ketadi). Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
+- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda lotin yozuvidagi namuna prompt (usiz matn kirill/turkcha imloga o'tib ketadi). Project atamalari lug'ati `.env`da emas — har project uchun bazada (keyingi task). Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
 - Server: uy kompyuterida (Windows, RTX 3060 8 GB) Docker'da — `docker compose --profile gpu up -d` (`compose.yaml`, rasmiy `whisper.cpp:main-cuda` image). Model bir marta yuklanadi.
 - Dev (Mac): native `whisper-server` (Metal GPU, Docker'dan ~70x tez) — `scripts/whisper-dev.sh`. Rasmiy image arm64 uchun yo'q.
 - Dev va server farqi faqat bitta sozlama: `STT_WHISPER_URL`.
