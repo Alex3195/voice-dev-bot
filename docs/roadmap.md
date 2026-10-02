@@ -18,12 +18,14 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 | #9 | Ulanishlar bir nechta provayder uchun: `🔗 Ulanishlar`, `CodeHost` / `IssueTracker`, V4 migratsiya (PR F) |
 | #10 | GitHub (github.com): token, repo'lar, hujjatlar, Issues, PR'lar (PR H) |
 | #12 | Repo'ni havola bilan ulash: server mavjud ulanishlardan topiladi, kerak bo'lsa token so'raladi (PR G) |
+| #14 | Ovozdan task: Claude qoralamasi (structured outputs, kesh, refusal/fallback), `/model`, lug'at takliflari (PR D1) |
 
 Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
 D esa ovozdan task yaratishni qo'shadi. C va E tayyor.
 
-Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F, H va G tayyor —
-**keyingisi D** (ovozdan task).
+Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F, H, G va D1 tayyor —
+**keyingisi D2** (spetsifikatsiya fayli), keyin D3 (project xotirasi). PR D uch qismga bo'lindi: D1 — Claude
+qoralamasi, D2 — `docs/specs/` ga MR/PR orqali spetsifikatsiya, D3 — project xotirasi.
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -113,31 +115,42 @@ Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan old
 
 ## PR D — Claude TaskParser
 
-- [ ] SDK: `com.anthropic:anthropic-java` (yangi dependency — ruxsat bilan). Kalit: `ANTHROPIC_API_KEY` `.env`da.
-- [ ] **Model tanlash** — Claude CLI'dagi `/model` kabi: `/model` va `⚙️ Sozlamalar → 🤖 Model`, ro'yxat Models
-      API'dan (`models.list`), har foydalanuvchi uchun alohida. **Standart: `claude-opus-5-5`**.
-- [ ] Natija **structured outputs** bilan (`output_config.format`, JSON sxema): `project, title, description,
-      acceptance_criteria, type, corrections[] (xato → to'g'ri), task_summary`.
-- [ ] **Effort** `low`/`medium` dan boshlanadi (Opus 5.5 default'i `medium`); haqiqiy namunalarda o'lchab sozlanadi.
-      `stop_reason: "refusal"`ni tekshirish, server-side fallback yoqiladi.
-- [ ] **Prompt caching** — barqaror qism oldinda, har bayt o'zgarishi undan keyingi keshni buzadi:
-      1. tizim ko'rsatmasi + sxema (deyarli o'zgarmaydi) — breakpoint 1;
-      2. project qoidalari (`CLAUDE.md`, `criteria.yml` — repo'dan);
-      3. project xotirasi + lug'at (har task'da o'sadi) — breakpoint 2;
-      4. yangi transkript (keshlanmaydi).
-      Opus 5.5'da minimum 512 token; o'qish $0.20/MTok, yozish 1.25× (5 daqiqa) / 2× (1 soat). TTL — jurnaldagi
-      haqiqiy so'rov oralig'iga qarab tanlanadi. `usage.cache_read_input_tokens` bilan tekshiriladi.
+### D1 — Claude qoralamasi (tayyor, #14)
+
+- [x] SDK: `com.anthropic:anthropic-java` 2.68.0. Kalit: `ANTHROPIC_API_KEY` `.env`da; bo'lmasa yoki Claude xato
+      bersa — oddiy qoralama (birinchi gap sarlavha), xatoda sababi ko'rsatiladi.
+- [x] **Model tanlash** — `/model` va `⚙️ Sozlamalar → 🤖 Claude modeli`, ro'yxat Models API'dan (faqat structured
+      outputs va `low` effort'ni qo'llaydiganlar), har foydalanuvchi uchun alohida (V5). **Standart:
+      `claude-opus-5-5`** (`CLAUDE_DEFAULT_MODEL`).
+- [x] Natija **structured outputs** bilan (`output_config.format`, JSON sxema): `project, title, description,
+      acceptance_criteria, type, corrections[] (heard → correct), task_summary`. Issue tavsifi: `## Talab` +
+      `## Acceptance criteria` (`- [ ]`).
+- [x] **Effort** `low` dan (`CLAUDE_EFFORT`); haqiqiy namunalarda o'lchab sozlanadi. `stop_reason: "refusal"` va
+      `max_tokens` tekshiriladi; Opus/Sonnet 5.x va Fable 5.1 uchun `fallbacks: "default"`.
+- [x] **Prompt caching** — 1) ko'rsatma (sxema `output_config`da, o'zgarmas) — breakpoint 1; 2) projectlar, lug'atlar,
+      faol project repo'sidagi `CLAUDE.md` va `.ai/criteria.yml` — breakpoint 2; 3) transkript — keshlanmaydi.
+      Repo ulanmagan bo'lsa Claude chaqirilmaydi.
+- [x] Faqat `✅ Task yaratish` bosilganda (har voice'da emas — pul tejaladi). Tasdiq ekranida: turi, tuzatishlar,
+      Claude boshqa projectni nazarda tutsa ogohlantirish, tokenlar va lug'atga `💡` takliflar (≤ 3 ta). Tasdiqsiz
+      hech narsa yaratilmaydi.
+- [x] Har chaqiruvning `usage`i (model, input, cache read/write, output) — `transcription.llm_usage` (jsonb).
+- [ ] Haqiqiy so'rovlarda tekshirish: kesh urilishi (`cache_read_input_tokens`), `low` effort sifati, TTL tanlash
+      (Opus 5.5'da minimum 512 token; o'qish $0.20/MTok, yozish 1.25× (5 daqiqa) / 2× (1 soat)).
+- [ ] Claude javobini kutayotganda "⏳" xabari (hozir tugma bosilgach bir necha soniya jimlik).
+
+### D2 — Spetsifikatsiya (keyingi)
+
+- [ ] **Spetsifikatsiya** (`.ai/task-template.md` formatida) → project repo'siga `docs/specs/<raqam>-<nom>.md`
+      (MR/PR orqali) + Issue (`ai-task` label, spetsifikatsiyaga havola). Project kartochkasidagi
+      `📄 Hujjatlar` — shu spetsifikatsiyalar. `CodeHost`ga branch, commit va MR/PR ochish kerak (GitLab va GitHub).
+
+### D3 — Project xotirasi
+
 - [ ] **Project xotirasi** (butun tarix yuborilmaydi, lekin hech narsa yo'qolmaydi):
       1. har task'ning qisqa xulosasi — o'sha javobning o'zida (`task_summary`), bazada;
       2. project xulosasi (qilingan ishlar, qarorlar, ochiq masalalar) — har N task'dan keyin qayta yoziladi
          (Batch API, 50% arzon), prompt'da doim turadi va keshlanadi;
       3. yangi transkriptga eng o'xshash 3–5 eski task xulosasi — Postgres full-text qidiruvi.
-- [ ] **Spetsifikatsiya** (`.ai/task-template.md` formatida) → project repo'siga `docs/specs/<raqam>-<nom>.md`
-      (MR orqali) + **GitLab Issue** (`ai-task` label, spetsifikatsiyaga havola). Project kartochkasidagi
-      `📄 Hujjatlar` — shu spetsifikatsiyalar.
-- [ ] Transkript ostida: `✅ Task yaratish` / `✏️ Tahrirlash` (tasdiqsiz hech narsa yaratilmaydi) va lug'atga
-      `💡` takliflar (`corrections`dan, ≤ 3 ta).
-- [ ] Har chaqiruvning `usage`i (input, cache read/write, output) jurnalga — har task narxi ko'rinadi.
 
 ## Keyin
 
