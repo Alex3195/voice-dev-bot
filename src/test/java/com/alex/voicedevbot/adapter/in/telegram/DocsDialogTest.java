@@ -6,7 +6,6 @@ import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,30 +13,31 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.DocsResult;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
-import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
 import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.CodeHostAndTracker;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
@@ -60,12 +60,11 @@ class DocsDialogTest {
   private final InMemoryProjectRepository projects = new InMemoryProjectRepository();
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
   private final BotConversation conversation = conversation();
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   private BotConversation conversation() {
     AccessPolicy access = new AccessPolicy(Set.of(USER));
@@ -74,19 +73,30 @@ class DocsDialogTest {
     Clock clock =
         Clock.fixed(GitLabFixtures.TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
     LinkRepoService repos =
-        new LinkRepoService(access, settings, connections, links, api, project -> Map.of(), clock);
+        new LinkRepoService(
+            access,
+            settings,
+            connections,
+            links,
+            GitLabFixtures.integrations(api),
+            project -> Map.of(),
+            clock);
     BrowseTranscriptsService transcripts =
         new BrowseTranscriptsService(access, new InMemoryTranscriptionLog());
     ProjectRepoAccess repoAccess =
-        new ProjectRepoAccess(access, settings, connections, links, clock);
+        new ProjectRepoAccess(
+            access, settings, connections, links, GitLabFixtures.integrations(api), clock);
     return new BotConversation(
         new ManageProjectsService(access, projects, settings, settingsRepository),
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         transcripts,
-        new GitLabDialog(new ManageGitLabService(access, connections, api, clock), repos),
-        new TaskDialog(new ManageTasksService(repoAccess, api), repos, transcripts),
-        new DocsDialog(new BrowseDocsService(repoAccess, api)),
+        new ConnectionsDialog(
+            new ManageConnectionsService(
+                access, connections, GitLabFixtures.integrations(api), clock),
+            repos),
+        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new DocsDialog(new BrowseDocsService(repoAccess)),
         ZoneOffset.UTC);
   }
 
@@ -95,10 +105,10 @@ class DocsDialogTest {
     projects.save(Project.named(ELT_IMZO));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
-    when(api.files(connection, REPO.id(), "", false)).thenReturn(List.of("CLAUDE.md"));
-    when(api.files(connection, REPO.id(), "docs", true))
+    when(api.files(connection, REPO, "", false)).thenReturn(List.of("CLAUDE.md"));
+    when(api.files(connection, REPO, "docs", true))
         .thenReturn(List.of("docs/roadmap.md", "docs/specs/001-login.md"));
   }
 
@@ -128,7 +138,7 @@ class DocsDialogTest {
 
   @Test
   void should_show_short_document_on_one_page_escaped() {
-    when(api.readFile(connection, REPO.id(), "docs/roadmap.md"))
+    when(api.readFile(connection, REPO, "docs/roadmap.md"))
         .thenReturn(Optional.of("# Roadmap\n<b>PR E</b> & D"));
 
     Screen page = press(Actions.document("docs/roadmap.md", 0)).screen();
@@ -141,7 +151,7 @@ class DocsDialogTest {
   @Test
   void should_page_long_document_by_lines() {
     String line = "x".repeat(99) + "\n";
-    when(api.readFile(connection, REPO.id(), "CLAUDE.md")).thenReturn(Optional.of(line.repeat(80)));
+    when(api.readFile(connection, REPO, "CLAUDE.md")).thenReturn(Optional.of(line.repeat(80)));
 
     Screen first = press(Actions.document("CLAUDE.md", 0)).screen();
     Screen last = press(Actions.document("CLAUDE.md", 9)).screen();
@@ -163,21 +173,21 @@ class DocsDialogTest {
 
   @Test
   void should_report_gitlab_failure_while_reading() {
-    when(api.readFile(any(), anyLong(), anyString()))
-        .thenThrow(new GitLabException(Reason.UNAVAILABLE, "GET raw failed", null));
+    when(api.readFile(any(), any(), anyString()))
+        .thenThrow(new IntegrationException(Reason.UNAVAILABLE, "GET raw failed", null));
 
     Screen screen = press(Actions.document("CLAUDE.md", 0)).screen();
 
-    assertThat(screen.html()).startsWith("⚠️ GitLab serveriga ulanib bo'lmadi");
+    assertThat(screen.html()).startsWith("⚠️ Serverga ulanib bo'lmadi");
   }
 
   @Test
   void should_report_failure_when_listing_fails_before_opening() {
-    when(api.files(any(), anyLong(), anyString(), anyBoolean()))
-        .thenThrow(new GitLabException(Reason.FORBIDDEN, "GET tree returned 403", null));
+    when(api.files(any(), any(), anyString(), anyBoolean()))
+        .thenThrow(new IntegrationException(Reason.FORBIDDEN, "GET tree returned 403", null));
 
     assertThat(press(Actions.document("CLAUDE.md", 0)).screen().html())
-        .startsWith("⚠️ GitLab bu amalga ruxsat bermadi");
+        .startsWith("⚠️ Xizmat bu amalga ruxsat bermadi");
   }
 
   @Test

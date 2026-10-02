@@ -2,7 +2,7 @@ package com.alex.voicedevbot.application.port.in;
 
 import com.alex.voicedevbot.domain.TelegramUserId;
 
-/** Foydalanuvchining faol projectini GitLab repo'ga bog'lash: mavjudini tanlash yoki yaratish. */
+/** Foydalanuvchining faol projectini repo'ga bog'lash: mavjudini tanlash yoki yaratish. */
 public interface LinkRepoUseCase {
 
   RepoLinkResult show(TelegramUserId user);

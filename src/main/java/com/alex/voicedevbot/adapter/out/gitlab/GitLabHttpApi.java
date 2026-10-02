@@ -1,15 +1,16 @@
 package com.alex.voicedevbot.adapter.out.gitlab;
 
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
-import com.alex.voicedevbot.domain.GitLabNamespace;
-import com.alex.voicedevbot.domain.GitLabRepo;
-import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.application.port.out.CodeHost;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
+import com.alex.voicedevbot.application.port.out.IssueTracker;
+import com.alex.voicedevbot.domain.AccessToken;
 import com.alex.voicedevbot.domain.MergeRequest;
+import com.alex.voicedevbot.domain.Namespace;
 import com.alex.voicedevbot.domain.NewTask;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.Repo;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.io.IOException;
@@ -41,7 +42,7 @@ import tools.jackson.databind.node.ObjectNode;
  * GitLab REST API v4 ({@code PRIVATE-TOKEN} sarlavhasi bilan). gitlab.com va self-hosted uchun bir
  * xil — faqat manzil farq qiladi. Token hech qachon xato xabariga tushmaydi.
  */
-public class GitLabHttpApi implements GitLabApi {
+public class GitLabHttpApi implements CodeHost, IssueTracker {
 
   static final int PAGE_SIZE = 10;
   static final String INITIAL_BRANCH = "main";
@@ -71,7 +72,7 @@ public class GitLabHttpApi implements GitLabApi {
   }
 
   @Override
-  public TokenInfo verify(GitLabAddress address, GitLabToken token) {
+  public TokenInfo verify(ServerAddress address, AccessToken token) {
     String owner = get(address, token, "/user").path("username").asString();
     JsonNode self = get(address, token, "/personal_access_tokens/self");
     Set<String> scopes = new HashSet<>();
@@ -83,7 +84,7 @@ public class GitLabHttpApi implements GitLabApi {
   }
 
   @Override
-  public List<GitLabRepo> searchRepos(GitLabConnection connection, String query) {
+  public List<Repo> searchRepos(ProviderConnection connection, String query) {
     String search = query.isBlank() ? "" : "&search=" + encode(query);
     JsonNode repos =
         get(
@@ -91,42 +92,42 @@ public class GitLabHttpApi implements GitLabApi {
             "/projects?membership=true&simple=true&order_by=last_activity_at&per_page="
                 + PAGE_SIZE
                 + search);
-    List<GitLabRepo> result = new ArrayList<>();
+    List<Repo> result = new ArrayList<>();
     repos.forEach(repo -> result.add(repoOf(repo)));
     return result;
   }
 
   @Override
-  public GitLabRepo findRepo(GitLabConnection connection, long repoId) {
+  public Repo findRepo(ProviderConnection connection, long repoId) {
     return repoOf(get(connection, "/projects/" + repoId));
   }
 
   @Override
-  public List<GitLabNamespace> namespaces(GitLabConnection connection) {
+  public List<Namespace> namespaces(ProviderConnection connection) {
     JsonNode namespaces = get(connection, "/namespaces?per_page=50");
-    List<GitLabNamespace> result = new ArrayList<>();
+    List<Namespace> result = new ArrayList<>();
     namespaces.forEach(
         namespace ->
             result.add(
-                new GitLabNamespace(
+                new Namespace(
                     namespace.path("id").asLong(),
                     namespace.path("full_path").asString(),
                     "user".equals(namespace.path("kind").asString()))));
     result.sort(
-        Comparator.comparing((GitLabNamespace namespace) -> !namespace.personal())
-            .thenComparing(GitLabNamespace::path));
+        Comparator.comparing((Namespace namespace) -> !namespace.personal())
+            .thenComparing(Namespace::path));
     return result;
   }
 
   @Override
-  public GitLabRepo createRepo(
-      GitLabConnection connection, long namespaceId, String name, Map<String, String> files) {
+  public Repo createRepo(
+      ProviderConnection connection, long namespaceId, String name, Map<String, String> files) {
     ObjectNode project = json.createObjectNode();
     project.put("name", name);
     project.put("namespace_id", namespaceId);
     project.put("visibility", "private");
     project.put("default_branch", INITIAL_BRANCH);
-    GitLabRepo repo = repoOf(post(connection, "/projects", project));
+    Repo repo = repoOf(post(connection, "/projects", project));
     if (!files.isEmpty()) {
       post(connection, "/projects/" + repo.id() + "/repository/commits", commitOf(files));
     }
@@ -134,25 +135,25 @@ public class GitLabHttpApi implements GitLabApi {
   }
 
   @Override
-  public List<Task> issues(GitLabConnection connection, long repoId, int limit) {
+  public List<Task> issues(ProviderConnection connection, Repo repo, int limit) {
     List<Task> result = new ArrayList<>();
     pages(
         connection,
-        "/projects/" + repoId + "/issues?scope=all&state=all&order_by=created_at&sort=desc",
+        "/projects/" + repo.id() + "/issues?scope=all&state=all&order_by=created_at&sort=desc",
         limit,
         issue -> result.add(taskOf(issue)));
     return result;
   }
 
   @Override
-  public Task issue(GitLabConnection connection, long repoId, long iid) {
-    return taskOf(get(connection, issuePath(repoId, iid)));
+  public Task issue(ProviderConnection connection, Repo repo, long iid) {
+    return taskOf(get(connection, issuePath(repo.id(), iid)));
   }
 
   @Override
-  public List<MergeRequest> mergeRequests(GitLabConnection connection, long repoId, long iid) {
+  public List<MergeRequest> mergeRequests(ProviderConnection connection, Repo repo, long iid) {
     List<MergeRequest> result = new ArrayList<>();
-    get(connection, issuePath(repoId, iid) + "/related_merge_requests")
+    get(connection, issuePath(repo.id(), iid) + "/related_merge_requests")
         .forEach(
             mergeRequest ->
                 result.add(
@@ -166,37 +167,37 @@ public class GitLabHttpApi implements GitLabApi {
 
   @Override
   public Task createIssue(
-      GitLabConnection connection, long repoId, NewTask task, List<String> labels) {
+      ProviderConnection connection, Repo repo, NewTask task, List<String> labels) {
     ObjectNode issue = json.createObjectNode();
     issue.put("title", task.title());
     issue.put("description", task.description());
     issue.put("labels", String.join(",", labels));
-    return taskOf(post(connection, "/projects/" + repoId + "/issues", issue));
+    return taskOf(post(connection, "/projects/" + repo.id() + "/issues", issue));
   }
 
   @Override
-  public Task setIssueOpen(GitLabConnection connection, long repoId, long iid, boolean open) {
+  public Task setIssueOpen(ProviderConnection connection, Repo repo, long iid, boolean open) {
     ObjectNode change = json.createObjectNode();
     change.put("state_event", open ? "reopen" : "close");
-    return taskOf(put(connection, issuePath(repoId, iid), change));
+    return taskOf(put(connection, issuePath(repo.id(), iid), change));
   }
 
   @Override
   public List<String> files(
-      GitLabConnection connection, long repoId, String directory, boolean recursive) {
+      ProviderConnection connection, Repo repo, String directory, boolean recursive) {
     String path = directory.isEmpty() ? "" : "&path=" + encode(directory);
     List<String> result = new ArrayList<>();
     try {
       pages(
           connection,
-          "/projects/" + repoId + "/repository/tree?recursive=" + recursive + path,
+          "/projects/" + repo.id() + "/repository/tree?recursive=" + recursive + path,
           MAX_FILES,
           entry -> {
             if ("blob".equals(entry.path("type").asString())) {
               result.add(entry.path("path").asString());
             }
           });
-    } catch (GitLabException e) {
+    } catch (IntegrationException e) {
       if (e.reason() == Reason.NOT_FOUND) {
         return List.of();
       }
@@ -206,14 +207,14 @@ public class GitLabHttpApi implements GitLabApi {
   }
 
   @Override
-  public Optional<String> readFile(GitLabConnection connection, long repoId, String path) {
-    String request = "/projects/" + repoId + "/repository/files/" + encodeSegment(path) + "/raw";
+  public Optional<String> readFile(ProviderConnection connection, Repo repo, String path) {
+    String request = "/projects/" + repo.id() + "/repository/files/" + encodeSegment(path) + "/raw";
     try {
       return Optional.of(
           sendForText(
               request(connection.address(), connection.token(), request).GET().build(),
               "GET " + request));
-    } catch (GitLabException e) {
+    } catch (IntegrationException e) {
       if (e.reason() == Reason.NOT_FOUND) {
         return Optional.empty();
       }
@@ -248,7 +249,7 @@ public class GitLabHttpApi implements GitLabApi {
 
   /** Sahifalab o'qiydi: sahifa to'lmaguncha yoki {@code limit}ga yetguncha. */
   private void pages(
-      GitLabConnection connection, String pathWithQuery, int limit, Consumer<JsonNode> each) {
+      ProviderConnection connection, String pathWithQuery, int limit, Consumer<JsonNode> each) {
     int read = 0;
     for (int page = 1; read < limit; page++) {
       JsonNode items =
@@ -283,22 +284,22 @@ public class GitLabHttpApi implements GitLabApi {
     return commit;
   }
 
-  private static GitLabRepo repoOf(JsonNode repo) {
-    return new GitLabRepo(
+  private static Repo repoOf(JsonNode repo) {
+    return new Repo(
         repo.path("id").asLong(),
         repo.path("path_with_namespace").asString(),
         URI.create(repo.path("web_url").asString()));
   }
 
-  private JsonNode get(GitLabConnection connection, String path) {
+  private JsonNode get(ProviderConnection connection, String path) {
     return get(connection.address(), connection.token(), path);
   }
 
-  private JsonNode get(GitLabAddress address, GitLabToken token, String path) {
+  private JsonNode get(ServerAddress address, AccessToken token, String path) {
     return send(request(address, token, path).GET().build(), "GET " + path);
   }
 
-  private JsonNode post(GitLabConnection connection, String path, JsonNode body) {
+  private JsonNode post(ProviderConnection connection, String path, JsonNode body) {
     HttpRequest request =
         request(connection.address(), connection.token(), path)
             .header("Content-Type", "application/json")
@@ -307,7 +308,7 @@ public class GitLabHttpApi implements GitLabApi {
     return send(request, "POST " + path);
   }
 
-  private JsonNode put(GitLabConnection connection, String path, JsonNode body) {
+  private JsonNode put(ProviderConnection connection, String path, JsonNode body) {
     HttpRequest request =
         request(connection.address(), connection.token(), path)
             .header("Content-Type", "application/json")
@@ -316,8 +317,8 @@ public class GitLabHttpApi implements GitLabApi {
     return send(request, "PUT " + path);
   }
 
-  private HttpRequest.Builder request(GitLabAddress address, GitLabToken token, String path) {
-    return HttpRequest.newBuilder(address.api(path))
+  private HttpRequest.Builder request(ServerAddress address, AccessToken token, String path) {
+    return HttpRequest.newBuilder(api(address, path))
         .timeout(timeout)
         .header("PRIVATE-TOKEN", token.value())
         .header("Accept", "application/json");
@@ -331,7 +332,7 @@ public class GitLabHttpApi implements GitLabApi {
     try {
       return json.readTree(body);
     } catch (JacksonException e) {
-      throw new GitLabException(Reason.UNAVAILABLE, description + " returned invalid JSON", e);
+      throw new IntegrationException(Reason.UNAVAILABLE, description + " returned invalid JSON", e);
     }
   }
 
@@ -340,17 +341,22 @@ public class GitLabHttpApi implements GitLabApi {
     try {
       response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     } catch (IOException e) {
-      throw new GitLabException(Reason.UNAVAILABLE, description + " failed", e);
+      throw new IntegrationException(Reason.UNAVAILABLE, description + " failed", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new GitLabException(Reason.UNAVAILABLE, description + " interrupted", e);
+      throw new IntegrationException(Reason.UNAVAILABLE, description + " interrupted", e);
     }
     int status = response.statusCode();
     if (status < HTTP_OK_MIN || status > HTTP_OK_MAX) {
-      throw new GitLabException(
+      throw new IntegrationException(
           reasonOf(status, response.body()), description + " returned HTTP " + status, null);
     }
     return response.body();
+  }
+
+  /** API manzili, masalan {@code https://gitlab.com/api/v4/user}. */
+  static URI api(ServerAddress address, String pathAndQuery) {
+    return URI.create(address + "/api/v4" + pathAndQuery);
   }
 
   /** GitLab band nomni 400 "has already been taken" bilan qaytaradi. */

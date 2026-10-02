@@ -32,7 +32,7 @@ final class DocScreens {
     listed.paths().stream()
         .limit(MAX_DOCUMENT_BUTTONS)
         .forEach(path -> rows.add(List.of(new Button("📄 " + path, Actions.document(path, 0)))));
-    rows.add(List.of(GitLabScreens.backToCard(listed.project())));
+    rows.add(List.of(ConnectionScreens.backToCard(listed.project())));
     String html =
         "📄 "
             + Html.bold(listed.project().value())

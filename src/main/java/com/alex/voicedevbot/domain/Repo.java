@@ -4,13 +4,13 @@ import java.net.URI;
 import java.util.Objects;
 
 /**
- * GitLab'dagi repo (project).
+ * Kod xizmatidagi repo (GitLab project, GitHub repository).
  *
  * @param path namespace bilan to'liq yo'l, masalan {@code alex/elt-imzo}
  */
-public record GitLabRepo(long id, String path, URI webUrl) {
+public record Repo(long id, String path, URI webUrl) {
 
-  public GitLabRepo {
+  public Repo {
     if (path == null || path.isBlank()) {
       throw new IllegalArgumentException("Repository path must not be blank");
     }

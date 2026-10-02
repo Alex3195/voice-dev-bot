@@ -1,18 +1,18 @@
 package com.alex.voicedevbot.application.service;
 
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabConnectionRepository;
-import com.alex.voicedevbot.application.port.out.GitLabException;
+import com.alex.voicedevbot.application.port.out.CodeHost;
+import com.alex.voicedevbot.application.port.out.ConnectionRepository;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.ProjectRepoLinks;
 import com.alex.voicedevbot.application.port.out.RepoTemplate;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabConnection;
-import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.RepoLink;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.TokenStatus;
@@ -26,30 +26,30 @@ import java.util.regex.Pattern;
 
 public class LinkRepoService implements LinkRepoUseCase {
 
-  /** GitLab repo nomi: harf, raqam, {@code _ . -} va bo'sh joy. */
+  /** Repo nomi (GitLab va GitHub uchun xavfsiz): harf, raqam, {@code _ . -} va bo'sh joy. */
   private static final Pattern REPO_NAME = Pattern.compile("[\\p{L}\\p{N}_.\\- ]{1,100}");
 
   private final AccessPolicy accessPolicy;
   private final UserSettingsLookup settings;
-  private final GitLabConnectionRepository connections;
+  private final ConnectionRepository connections;
   private final ProjectRepoLinks links;
-  private final GitLabApi gitLab;
+  private final Integrations integrations;
   private final RepoTemplate template;
   private final Clock clock;
 
   public LinkRepoService(
       AccessPolicy accessPolicy,
       UserSettingsLookup settings,
-      GitLabConnectionRepository connections,
+      ConnectionRepository connections,
       ProjectRepoLinks links,
-      GitLabApi gitLab,
+      Integrations integrations,
       RepoTemplate template,
       Clock clock) {
     this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy");
     this.settings = Objects.requireNonNull(settings, "settings");
     this.connections = Objects.requireNonNull(connections, "connections");
     this.links = Objects.requireNonNull(links, "links");
-    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
+    this.integrations = Objects.requireNonNull(integrations, "integrations");
     this.template = Objects.requireNonNull(template, "template");
     this.clock = Objects.requireNonNull(clock, "clock");
   }
@@ -67,7 +67,7 @@ public class LinkRepoService implements LinkRepoUseCase {
         connectionId,
         (project, connection) ->
             new RepoLinkResult.Repos(
-                connectionId, trimmed, gitLab.searchRepos(connection, trimmed)));
+                connectionId, trimmed, code(connection).searchRepos(connection, trimmed)));
   }
 
   @Override
@@ -76,7 +76,7 @@ public class LinkRepoService implements LinkRepoUseCase {
         user,
         connectionId,
         (project, connection) ->
-            new RepoLinkResult.Namespaces(connectionId, gitLab.namespaces(connection)));
+            new RepoLinkResult.Namespaces(connectionId, code(connection).namespaces(connection)));
   }
 
   @Override
@@ -84,7 +84,8 @@ public class LinkRepoService implements LinkRepoUseCase {
     return withConnection(
         user,
         connectionId,
-        (project, connection) -> save(project, connection, gitLab.findRepo(connection, repoId)));
+        (project, connection) ->
+            save(project, connection, code(connection).findRepo(connection, repoId)));
   }
 
   @Override
@@ -93,7 +94,7 @@ public class LinkRepoService implements LinkRepoUseCase {
     String trimmed = name == null ? "" : name.strip();
     if (!REPO_NAME.matcher(trimmed).matches()) {
       return accessPolicy.isAllowed(user)
-          ? new RepoLinkResult.Failed(GitLabProblem.INVALID_REPO_NAME)
+          ? new RepoLinkResult.Failed(ConnectionProblem.INVALID_REPO_NAME)
           : new RepoLinkResult.AccessDenied();
     }
     return withConnection(
@@ -103,7 +104,8 @@ public class LinkRepoService implements LinkRepoUseCase {
             save(
                 project,
                 connection,
-                gitLab.createRepo(connection, namespaceId, trimmed, template.files(project))));
+                code(connection)
+                    .createRepo(connection, namespaceId, trimmed, template.files(project))));
   }
 
   @Override
@@ -116,7 +118,7 @@ public class LinkRepoService implements LinkRepoUseCase {
         });
   }
 
-  private RepoLinkResult save(ProjectName project, GitLabConnection connection, GitLabRepo repo) {
+  private RepoLinkResult save(ProjectName project, ProviderConnection connection, Repo repo) {
     RepoLink link = new RepoLink(connection.id(), repo);
     links.link(project, link);
     return new RepoLinkResult.Linked(project, link, view(connection));
@@ -124,7 +126,7 @@ public class LinkRepoService implements LinkRepoUseCase {
 
   private RepoLinkResult describe(ProjectName project) {
     Optional<RepoLink> link = links.find(project);
-    Optional<GitLabConnection> connection =
+    Optional<ProviderConnection> connection =
         link.flatMap(found -> connections.find(found.connectionId()));
     if (link.isPresent() && connection.isPresent()) {
       return new RepoLinkResult.Linked(project, link.get(), view(connection.get()));
@@ -145,17 +147,17 @@ public class LinkRepoService implements LinkRepoUseCase {
         .orElseGet(RepoLinkResult.NoActiveProject::new);
   }
 
-  /** Tugagan yoki GitLab rad etgan token bilan amal bajarilmaydi — yangilash taklif qilinadi. */
+  /** Tugagan yoki xizmat rad etgan token bilan amal bajarilmaydi — yangilash taklif qilinadi. */
   private RepoLinkResult withConnection(
       TelegramUserId user,
       long connectionId,
-      BiFunction<ProjectName, GitLabConnection, RepoLinkResult> action) {
+      BiFunction<ProjectName, ProviderConnection, RepoLinkResult> action) {
     return withProject(
         user,
         project -> {
-          Optional<GitLabConnection> connection = connections.find(connectionId);
+          Optional<ProviderConnection> connection = connections.find(connectionId);
           if (connection.isEmpty()) {
-            return new RepoLinkResult.Failed(GitLabProblem.NOT_FOUND);
+            return new RepoLinkResult.Failed(ConnectionProblem.NOT_FOUND);
           }
           ConnectionView view = view(connection.get());
           if (view.status() == TokenStatus.EXPIRED) {
@@ -163,15 +165,19 @@ public class LinkRepoService implements LinkRepoUseCase {
           }
           try {
             return action.apply(project, connection.get());
-          } catch (GitLabException e) {
-            return e.reason() == GitLabException.Reason.UNAUTHORIZED
+          } catch (IntegrationException e) {
+            return e.reason() == IntegrationException.Reason.UNAUTHORIZED
                 ? new RepoLinkResult.NeedsNewToken(view)
-                : new RepoLinkResult.Failed(GitLabProblems.of(e));
+                : new RepoLinkResult.Failed(ConnectionProblems.of(e));
           }
         });
   }
 
-  private ConnectionView view(GitLabConnection connection) {
+  private CodeHost code(ProviderConnection connection) {
+    return integrations.codeHost(connection);
+  }
+
+  private ConnectionView view(ProviderConnection connection) {
     return new ConnectionView(connection, connection.status(LocalDate.now(clock)));
   }
 }

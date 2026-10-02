@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.alex.voicedevbot.application.port.out.StorageException;
-import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.domain.AccessToken;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -15,7 +15,7 @@ class TokenCipherTest {
 
   static final String KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
   private static final String OTHER_KEY = "ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=";
-  private static final GitLabToken TOKEN = new GitLabToken("glpat-secretToken1234");
+  private static final AccessToken TOKEN = new AccessToken("glpat-secretToken1234");
 
   @Test
   void should_decrypt_what_it_encrypted_and_never_store_plain_token() {

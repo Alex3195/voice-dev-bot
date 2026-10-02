@@ -6,11 +6,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-/** GitLab tekshirgan token ma'lumoti: egasi, ruxsatlari va tugash sanasi (bo'lmasligi mumkin). */
+/** Xizmat tekshirgan token ma'lumoti: egasi, ruxsatlari va tugash sanasi (bo'lmasligi mumkin). */
 public final class TokenInfo {
-
-  /** Bot repo yaratadi, issue ochadi va yopadi — {@code read_api} yetmaydi. */
-  public static final String REQUIRED_SCOPE = "api";
 
   static final int WARN_DAYS_BEFORE_EXPIRY = 7;
 
@@ -48,11 +45,14 @@ public final class TokenInfo {
     return Optional.ofNullable(expiresAt);
   }
 
-  public boolean hasRequiredScope() {
-    return scopes.contains(REQUIRED_SCOPE);
+  /**
+   * @see Provider#requiredScope()
+   */
+  public boolean hasScope(String scope) {
+    return scopes.contains(scope);
   }
 
-  /** GitLab token'ni {@code expires_at} kuni boshlanishi bilan o'chiradi. */
+  /** Token {@code expires_at} kuni boshlanishi bilan o'chadi. */
   public TokenStatus status(LocalDate today) {
     if (expiresAt == null) {
       return TokenStatus.ACTIVE;

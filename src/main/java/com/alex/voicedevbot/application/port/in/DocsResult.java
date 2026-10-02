@@ -1,7 +1,7 @@
 package com.alex.voicedevbot.application.port.in;
 
-import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Repo;
 import java.util.List;
 import java.util.Objects;
 
@@ -11,7 +11,7 @@ public sealed interface DocsResult permits DocsResult.Listed, DocsResult.Opened,
   /**
    * @param paths {@code CLAUDE.md}, roadmap, qarorlar, spetsifikatsiyalar, keyin qolganlari
    */
-  record Listed(ProjectName project, GitLabRepo repo, List<String> paths) implements DocsResult {
+  record Listed(ProjectName project, Repo repo, List<String> paths) implements DocsResult {
 
     public Listed {
       Objects.requireNonNull(project, "project");

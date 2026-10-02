@@ -12,27 +12,28 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
 import com.alex.voicedevbot.application.port.in.TasksResult;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.CodeHostAndTracker;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
 import java.net.URI;
@@ -56,10 +57,9 @@ class ManageTasksServiceTest {
 
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
   private final ManageTasksService service =
       new ManageTasksService(
           new ProjectRepoAccess(
@@ -67,16 +67,16 @@ class ManageTasksServiceTest {
               new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz")),
               connections,
               links,
-              Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)),
-          api);
+              GitLabFixtures.integrations(api),
+              Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)));
 
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   @BeforeEach
   void linkedProject() {
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 
@@ -92,8 +92,7 @@ class ManageTasksServiceTest {
   }
 
   private void issues(Task... tasks) {
-    when(api.issues(connection, REPO.id(), ManageTasksService.ISSUE_LIMIT))
-        .thenReturn(List.of(tasks));
+    when(api.issues(connection, REPO, ManageTasksService.ISSUE_LIMIT)).thenReturn(List.of(tasks));
   }
 
   @Test
@@ -181,8 +180,8 @@ class ManageTasksServiceTest {
     MergeRequest mr =
         new MergeRequest(
             3, "Login fix", MergeRequest.State.MERGED, URI.create("https://gitlab.com/mr/3"));
-    when(api.issue(connection, REPO.id(), 7)).thenReturn(task);
-    when(api.mergeRequests(connection, REPO.id(), 7)).thenReturn(List.of(mr));
+    when(api.issue(connection, REPO, 7)).thenReturn(task);
+    when(api.mergeRequests(connection, REPO, 7)).thenReturn(List.of(mr));
 
     assertThat(service.open(USER, 7))
         .isEqualTo(new TasksResult.Opened(ELT_IMZO, task, TaskStatus.IN_REVIEW, List.of(mr)));
@@ -192,7 +191,7 @@ class ManageTasksServiceTest {
   void should_create_issue_with_ai_task_label() {
     NewTask draft = new NewTask("Login", "Parolni tiklash");
     Task created = task(8, true, null, 0);
-    when(api.createIssue(connection, REPO.id(), draft, List.of(ManageTasksUseCase.AI_TASK_LABEL)))
+    when(api.createIssue(connection, REPO, draft, List.of(ManageTasksUseCase.AI_TASK_LABEL)))
         .thenReturn(created);
 
     assertThat(service.create(USER, draft)).isEqualTo(new TasksResult.Created(ELT_IMZO, created));
@@ -202,8 +201,8 @@ class ManageTasksServiceTest {
   void should_close_and_reopen_task() {
     Task closed = task(7, false, null, 0);
     Task reopened = task(7, true, null, 0);
-    when(api.setIssueOpen(connection, REPO.id(), 7, false)).thenReturn(closed);
-    when(api.setIssueOpen(connection, REPO.id(), 7, true)).thenReturn(reopened);
+    when(api.setIssueOpen(connection, REPO, 7, false)).thenReturn(closed);
+    when(api.setIssueOpen(connection, REPO, 7, true)).thenReturn(reopened);
 
     assertThat(service.setOpen(USER, 7, false))
         .isEqualTo(new TasksResult.Opened(ELT_IMZO, closed, TaskStatus.CLOSED, List.of()));
@@ -229,7 +228,10 @@ class ManageTasksServiceTest {
   @Test
   void should_ask_for_new_token_without_calling_gitlab_when_token_expired() {
     connections.save(
-        GitLabAddress.GITLAB_COM, TOKEN, GitLabFixtures.expiringOn(TODAY.minusDays(1)));
+        Provider.GITLAB,
+        ServerAddress.GITLAB_COM,
+        TOKEN,
+        GitLabFixtures.expiringOn(TODAY.minusDays(1)));
 
     assertThat(service.overview(USER)).isInstanceOf(RepoUnavailable.NeedsNewToken.class);
     verifyNoInteractions(api);
@@ -237,19 +239,19 @@ class ManageTasksServiceTest {
 
   @Test
   void should_ask_for_new_token_when_gitlab_rejects_it() {
-    when(api.issues(any(), anyLong(), anyInt()))
-        .thenThrow(new GitLabException(Reason.UNAUTHORIZED, "GET issues returned 401", null));
+    when(api.issues(any(), any(), anyInt()))
+        .thenThrow(new IntegrationException(Reason.UNAUTHORIZED, "GET issues returned 401", null));
 
     assertThat(service.overview(USER)).isInstanceOf(RepoUnavailable.NeedsNewToken.class);
   }
 
   @Test
   void should_report_gitlab_failure() {
-    when(api.issue(any(), anyLong(), anyLong()))
-        .thenThrow(new GitLabException(Reason.NOT_FOUND, "GET issue returned 404", null));
+    when(api.issue(any(), any(), anyLong()))
+        .thenThrow(new IntegrationException(Reason.NOT_FOUND, "GET issue returned 404", null));
 
     assertThat(service.open(USER, 99))
-        .isEqualTo(new RepoUnavailable.Failed(GitLabProblem.NOT_FOUND));
+        .isEqualTo(new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));
   }
 
   @Test
@@ -266,6 +268,6 @@ class ManageTasksServiceTest {
 
     service.overview(USER);
 
-    verify(api).issues(connection, REPO.id(), ManageTasksService.ISSUE_LIMIT);
+    verify(api).issues(connection, REPO, ManageTasksService.ISSUE_LIMIT);
   }
 }

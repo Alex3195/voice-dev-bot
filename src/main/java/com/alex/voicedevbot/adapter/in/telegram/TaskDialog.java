@@ -227,15 +227,15 @@ public class TaskDialog {
     return describe(result);
   }
 
-  /** Bazadagi bog'lanish bo'yicha (GitLab'ga so'rovsiz) — sarlavha so'rashdan oldin. */
+  /** Bazadagi bog'lanish bo'yicha (xizmatga so'rovsiz) — sarlavha so'rashdan oldin. */
   private Optional<Screen> withRepo(
       TelegramUserId user, Function<RepoLinkResult.Linked, Optional<Screen>> action) {
     return switch (repos.show(user)) {
       case RepoLinkResult.Linked linked -> action.apply(linked);
       case RepoLinkResult.NotLinked notLinked ->
-          GitLabScreens.unavailable(new RepoUnavailable.NotLinked(notLinked.project()));
+          ConnectionScreens.unavailable(new RepoUnavailable.NotLinked(notLinked.project()));
       case RepoLinkResult.NoActiveProject() ->
-          GitLabScreens.unavailable(new RepoUnavailable.NoActiveProject());
+          ConnectionScreens.unavailable(new RepoUnavailable.NoActiveProject());
       default -> Optional.empty();
     };
   }
@@ -246,7 +246,7 @@ public class TaskDialog {
       case TasksResult.Page page -> Optional.of(TaskScreens.page(page));
       case TasksResult.Opened opened -> Optional.of(TaskScreens.opened(opened));
       case TasksResult.Created created -> Optional.of(TaskScreens.created(created));
-      case RepoUnavailable unavailable -> GitLabScreens.unavailable(unavailable);
+      case RepoUnavailable unavailable -> ConnectionScreens.unavailable(unavailable);
     };
   }
 

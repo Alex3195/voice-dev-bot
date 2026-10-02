@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Davriy ishga tushiriladi: tugayotgan GitLab tokenlari haqida whitelist'dagi har bir userga {@code
+ * Davriy ishga tushiriladi: tugayotgan xizmat tokenlari haqida whitelist'dagi har bir userga {@code
  * 🔑 Tokenni yangilash} tugmasi bilan xabar yuboradi. Har ulanish uchun kuniga bir marta.
  */
 public class TokenExpiryNotifier implements Runnable {
@@ -32,11 +32,11 @@ public class TokenExpiryNotifier implements Runnable {
   public void run() {
     try {
       for (ConnectionView view : alerts.dueAlerts()) {
-        Screen alert = GitLabScreens.tokenAlert(view);
+        Screen alert = ConnectionScreens.tokenAlert(view);
         recipients.forEach(user -> bot.notify(user, alert));
       }
     } catch (RuntimeException e) {
-      log.error("Failed to send GitLab token expiry alerts", e);
+      log.error("Failed to send token expiry alerts", e);
     }
   }
 }

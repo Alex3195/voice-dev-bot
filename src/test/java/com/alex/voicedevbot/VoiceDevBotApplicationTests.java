@@ -9,7 +9,7 @@ import com.alex.voicedevbot.adapter.out.stt.WhisperCppSpeechToText;
 import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
-import com.alex.voicedevbot.application.port.in.ManageGitLabUseCase;
+import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
 import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
 import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.out.ProjectRepository;
@@ -122,7 +122,7 @@ class VoiceDevBotApplicationTests {
 
   @Test
   void should_wire_gitlab_use_cases() {
-    assertThat(context.getBean(ManageGitLabUseCase.class)).isNotNull();
+    assertThat(context.getBean(ManageConnectionsUseCase.class)).isNotNull();
     assertThat(context.getBean(LinkRepoUseCase.class)).isNotNull();
   }
 

@@ -5,8 +5,8 @@ import com.alex.voicedevbot.domain.TaskStatus;
 import com.alex.voicedevbot.domain.TelegramUserId;
 
 /**
- * Faol projectning tasklari — uning repo'sidagi GitLab Issue'lar. Holat GitLab'dan har safar
- * yangidan o'qiladi (botda nusxa yo'q).
+ * Faol projectning tasklari — uning repo'sidagi Issue'lar. Holat xizmatdan har safar yangidan
+ * o'qiladi (botda nusxa yo'q).
  */
 public interface ManageTasksUseCase {
 

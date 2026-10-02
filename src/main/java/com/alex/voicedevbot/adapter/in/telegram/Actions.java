@@ -1,5 +1,6 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.TaskStatus;
 import java.util.Locale;
 
@@ -30,22 +31,22 @@ final class Actions {
   static final String TRANSCRIPTS = "tr:";
   static final String OPEN_TRANSCRIPT = "tro:";
 
-  static final String GITLAB = "gl";
-  static final String GITLAB_PREFIX = "gl:";
-  static final String GITLAB_ADD = "gl:add";
-  static final String GITLAB_COM = "gl:com";
-  static final String GITLAB_OTHER = "gl:url";
-  static final String GITLAB_SHOW = "gl:c:";
-  static final String GITLAB_RENEW = "gl:r:";
-  static final String GITLAB_REMOVE_ASK = "gl:d:";
-  static final String GITLAB_REMOVE = "gl:dd:";
-  static final String REPO = "gl:repo";
-  static final String REPO_CHOOSE = "gl:choose";
-  static final String REPO_PICK = "gl:pick:";
-  static final String REPO_LINK = "gl:l:";
-  static final String REPO_NEW = "gl:new:";
-  static final String REPO_NAMESPACE = "gl:ns:";
-  static final String REPO_UNLINK = "gl:unlink";
+  static final String CONNECTIONS = "cn";
+  static final String CONNECTION_PREFIX = "cn:";
+  static final String CONNECTION_ADD = "cn:add";
+  static final String CONNECTION_DEFAULT = "cn:pd:";
+  static final String CONNECTION_OTHER = "cn:po:";
+  static final String CONNECTION_SHOW = "cn:c:";
+  static final String CONNECTION_RENEW = "cn:r:";
+  static final String CONNECTION_REMOVE_ASK = "cn:d:";
+  static final String CONNECTION_REMOVE = "cn:dd:";
+  static final String REPO = "cn:repo";
+  static final String REPO_CHOOSE = "cn:choose";
+  static final String REPO_PICK = "cn:pick:";
+  static final String REPO_LINK = "cn:l:";
+  static final String REPO_NEW = "cn:new:";
+  static final String REPO_NAMESPACE = "cn:ns:";
+  static final String REPO_UNLINK = "cn:unlink";
 
   static final String TASKS = "tk";
   static final String TASK_PREFIX = "tk:";
@@ -92,6 +93,16 @@ final class Actions {
 
   static String openTranscript(long id) {
     return NEW_MESSAGE + OPEN_TRANSCRIPT + id;
+  }
+
+  /** Xizmatning standart serveriga ({@code gitlab.com}, {@code github.com}) ulanish. */
+  static String connectDefault(Provider provider) {
+    return CONNECTION_DEFAULT + provider.name();
+  }
+
+  /** O'z serveringiz (self-hosted): avval manzil so'raladi. */
+  static String connectOther(Provider provider) {
+    return CONNECTION_OTHER + provider.name();
   }
 
   /**

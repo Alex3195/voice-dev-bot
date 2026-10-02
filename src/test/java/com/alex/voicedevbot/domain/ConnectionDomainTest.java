@@ -12,25 +12,28 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class GitLabDomainTest {
+class ConnectionDomainTest {
 
   private static final LocalDate TODAY = LocalDate.of(2026, 10, 2);
 
   @Test
   void should_mask_token_everywhere_it_can_be_printed() {
-    GitLabToken token = new GitLabToken(" glpat-AbCdEfGh1234a1b2 ");
+    AccessToken token = new AccessToken(" glpat-AbCdEfGh1234a1b2 ");
 
     assertThat(token.value()).isEqualTo("glpat-AbCdEfGh1234a1b2");
     assertThat(token.masked()).isEqualTo("glpat-…a1b2");
-    assertThat(token.toString()).isEqualTo("GitLabToken[glpat-…a1b2]").doesNotContain("AbCd");
-    assertThat(new GitLabToken("abcdefgh1234").masked()).isEqualTo("…1234");
+    assertThat(token.toString()).isEqualTo("AccessToken[glpat-…a1b2]").doesNotContain("AbCd");
+    assertThat(new AccessToken("abcdefgh1234").masked()).isEqualTo("…1234");
+    assertThat(new AccessToken("github_pat_11ABCDEFG0abcd").masked()).isEqualTo("github_pat_…abcd");
+    assertThat(new AccessToken("ghp_abcdefgh1234").masked()).isEqualTo("ghp_…1234");
+    assertThat(new AccessToken("secret_partOfToken9").masked()).isEqualTo("…ken9");
   }
 
   @ParameterizedTest
   @NullSource
   @ValueSource(strings = {"", "short", "has space inside", "glpat-ab\ncd1234"})
   void should_reject_token_with_invalid_format(String value) {
-    assertThatThrownBy(() -> new GitLabToken(value)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new AccessToken(value)).isInstanceOf(IllegalArgumentException.class);
   }
 
   @ParameterizedTest
@@ -41,11 +44,10 @@ class GitLabDomainTest {
     "  git.example.uz , https://git.example.uz, git.example.uz"
   })
   void should_normalize_gitlab_address(String input, String uri, String label) {
-    GitLabAddress address = GitLabAddress.parse(input);
+    ServerAddress address = ServerAddress.parse(input);
 
     assertThat(address.uri()).isEqualTo(URI.create(uri));
     assertThat(address.label()).isEqualTo(label);
-    assertThat(address.api("/user")).isEqualTo(URI.create(uri + "/api/v4/user"));
   }
 
   @ParameterizedTest
@@ -59,7 +61,7 @@ class GitLabDomainTest {
         "http://"
       })
   void should_reject_invalid_gitlab_address(String input) {
-    assertThatThrownBy(() -> GitLabAddress.parse(input))
+    assertThatThrownBy(() -> ServerAddress.parse(input))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -84,9 +86,8 @@ class GitLabDomainTest {
 
     assertThat(info.status(TODAY)).isEqualTo(TokenStatus.ACTIVE);
     assertThat(info.expiresAt()).isEmpty();
-    assertThat(info.hasRequiredScope()).isFalse();
-    assertThat(TokenInfo.withoutExpiry("alex", Set.of("api", "read_user")).hasRequiredScope())
-        .isTrue();
+    assertThat(info.hasScope("api")).isFalse();
+    assertThat(info.hasScope("read_api")).isTrue();
   }
 
   @Test
@@ -104,18 +105,56 @@ class GitLabDomainTest {
 
   @Test
   void should_label_connection_and_reject_blank_repo_or_namespace() {
-    GitLabConnection connection =
-        new GitLabConnection(
+    ProviderConnection connection =
+        new ProviderConnection(
             1,
-            GitLabAddress.GITLAB_COM,
-            new GitLabToken("glpat-12345678"),
+            Provider.GITLAB,
+            ServerAddress.GITLAB_COM,
+            new AccessToken("glpat-12345678"),
             TokenInfo.withoutExpiry("alex", Set.of("api")));
 
     assertThat(connection.label()).isEqualTo("gitlab.com · @alex");
     assertThat(connection.status(TODAY)).isEqualTo(TokenStatus.ACTIVE);
-    assertThatThrownBy(() -> new GitLabRepo(1, " ", URI.create("https://gitlab.com/x")))
+    assertThatThrownBy(() -> new Repo(1, " ", URI.create("https://gitlab.com/x")))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> new GitLabNamespace(1, "", true))
+    assertThatThrownBy(() -> new Namespace(1, "", true))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void should_describe_providers() {
+    assertThat(Provider.GITLAB.defaultAddress()).isEqualTo(ServerAddress.GITLAB_COM);
+    assertThat(Provider.GITLAB.selfHosted()).isTrue();
+    assertThat(Provider.GITLAB.requiredScope()).contains("api");
+    assertThat(Provider.GITHUB.defaultAddress().label()).isEqualTo("github.com");
+    assertThat(Provider.GITHUB.selfHosted()).isFalse();
+    assertThat(Provider.GITHUB.displayName()).isEqualTo("GitHub");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"GITLAB, api, true", "GITLAB, read_api, false", "GITHUB, read_api, true"})
+  void should_check_scope_required_by_provider(Provider provider, String scope, boolean enough) {
+    ProviderConnection connection =
+        new ProviderConnection(
+            1,
+            provider,
+            provider.defaultAddress(),
+            new AccessToken("glpat-12345678"),
+            TokenInfo.withoutExpiry("alex", Set.of(scope)));
+
+    assertThat(connection.hasRequiredScope()).isEqualTo(enough);
+  }
+
+  @Test
+  void should_require_provider_for_connection() {
+    assertThatThrownBy(
+            () ->
+                new ProviderConnection(
+                    1,
+                    null,
+                    ServerAddress.GITLAB_COM,
+                    new AccessToken("glpat-12345678"),
+                    TokenInfo.withoutExpiry("alex", Set.of("api"))))
+        .isInstanceOf(NullPointerException.class);
   }
 }

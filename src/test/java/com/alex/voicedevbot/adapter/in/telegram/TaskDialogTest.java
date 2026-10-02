@@ -5,7 +5,6 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,12 +13,11 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
-import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
@@ -28,13 +26,14 @@ import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SourceAudio;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.Task;
@@ -44,8 +43,9 @@ import com.alex.voicedevbot.domain.Transcript;
 import com.alex.voicedevbot.domain.TranscriptRecord;
 import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.CodeHostAndTracker;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
@@ -76,13 +76,12 @@ class TaskDialogTest {
   private final InMemoryProjectRepository projects = new InMemoryProjectRepository();
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
   private final InMemoryTranscriptionLog transcriptLog = new InMemoryTranscriptionLog();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
   private final BotConversation conversation = conversation();
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   private BotConversation conversation() {
     AccessPolicy access = new AccessPolicy(Set.of(USER));
@@ -90,18 +89,29 @@ class TaskDialogTest {
         new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz"));
     Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
     LinkRepoService repos =
-        new LinkRepoService(access, settings, connections, links, api, project -> Map.of(), clock);
+        new LinkRepoService(
+            access,
+            settings,
+            connections,
+            links,
+            GitLabFixtures.integrations(api),
+            project -> Map.of(),
+            clock);
     BrowseTranscriptsService transcripts = new BrowseTranscriptsService(access, transcriptLog);
     ProjectRepoAccess repoAccess =
-        new ProjectRepoAccess(access, settings, connections, links, clock);
+        new ProjectRepoAccess(
+            access, settings, connections, links, GitLabFixtures.integrations(api), clock);
     return new BotConversation(
         new ManageProjectsService(access, projects, settings, settingsRepository),
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         transcripts,
-        new GitLabDialog(new ManageGitLabService(access, connections, api, clock), repos),
-        new TaskDialog(new ManageTasksService(repoAccess, api), repos, transcripts),
-        new DocsDialog(new BrowseDocsService(repoAccess, api)),
+        new ConnectionsDialog(
+            new ManageConnectionsService(
+                access, connections, GitLabFixtures.integrations(api), clock),
+            repos),
+        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new DocsDialog(new BrowseDocsService(repoAccess)),
         ZoneOffset.UTC);
   }
 
@@ -110,7 +120,7 @@ class TaskDialogTest {
     projects.save(Project.named(ELT_IMZO));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 
@@ -126,8 +136,7 @@ class TaskDialogTest {
   }
 
   private void issues(Task... tasks) {
-    when(api.issues(connection, REPO.id(), ManageTasksService.ISSUE_LIMIT))
-        .thenReturn(List.of(tasks));
+    when(api.issues(connection, REPO, ManageTasksService.ISSUE_LIMIT)).thenReturn(List.of(tasks));
   }
 
   private Screen text(String text) {
@@ -187,8 +196,8 @@ class TaskDialogTest {
   void should_list_group_and_open_task_with_merge_requests() {
     Task task = task(3, "Login sahifasi", true, null, 1);
     issues(task, task(2, "B", true, null, 0));
-    when(api.issue(connection, REPO.id(), 3)).thenReturn(task);
-    when(api.mergeRequests(connection, REPO.id(), 3))
+    when(api.issue(connection, REPO, 3)).thenReturn(task);
+    when(api.mergeRequests(connection, REPO, 3))
         .thenReturn(
             List.of(
                 new MergeRequest(
@@ -202,7 +211,7 @@ class TaskDialogTest {
     assertThat(opened.html())
         .startsWith("🔀 <b>#3 Login sahifasi</b>\n🔀 MR ochilgan\n")
         .contains("Tavsif &lt;b&gt;")
-        .contains("🔀 ochiq · <a href=\"https://mr/5\">!5 Fix login</a>");
+        .contains("🔀 ochiq · <a href=\"https://mr/5\">Fix login</a>");
     assertThat(labels(opened)).containsExactly("✔️ Yopish", "⬅️ 🔀 MR ochilgan", "✅ Tasklar");
   }
 
@@ -225,11 +234,9 @@ class TaskDialogTest {
 
   @Test
   void should_close_and_reopen_task() {
-    when(api.setIssueOpen(connection, REPO.id(), 3, false))
-        .thenReturn(task(3, "Login", false, null, 0));
-    when(api.setIssueOpen(connection, REPO.id(), 3, true))
-        .thenReturn(task(3, "Login", true, null, 0));
-    when(api.mergeRequests(connection, REPO.id(), 3)).thenReturn(List.of());
+    when(api.setIssueOpen(connection, REPO, 3, false)).thenReturn(task(3, "Login", false, null, 0));
+    when(api.setIssueOpen(connection, REPO, 3, true)).thenReturn(task(3, "Login", true, null, 0));
+    when(api.mergeRequests(connection, REPO, 3)).thenReturn(List.of());
 
     Screen closed = press(Actions.TASK_CLOSE + 3).screen();
     Screen reopened = press(Actions.TASK_REOPEN + 3).screen();
@@ -243,12 +250,12 @@ class TaskDialogTest {
   void should_create_task_from_title_and_description_only_after_confirmation() {
     Task created = task(12, "Login", true, null, 0);
     NewTask draft = new NewTask("Login", "Parolni tiklash");
-    when(api.createIssue(connection, REPO.id(), draft, LABELS)).thenReturn(created);
+    when(api.createIssue(connection, REPO, draft, LABELS)).thenReturn(created);
 
     Screen askTitle = press(Actions.TASK_NEW).screen();
     Screen askDescription = text("Login");
     Screen confirm = text("Parolni tiklash");
-    verify(api, never()).createIssue(any(), anyLong(), any(), any());
+    verify(api, never()).createIssue(any(), any(), any(), any());
     Screen done = press(Actions.TASK_CONFIRM).screen();
 
     assertThat(askTitle.html()).startsWith("✍️ <b>ELT imzo</b> uchun yangi task sarlavhasini");
@@ -265,7 +272,7 @@ class TaskDialogTest {
 
   @Test
   void should_create_task_without_description() {
-    when(api.createIssue(connection, REPO.id(), new NewTask("Login", ""), LABELS))
+    when(api.createIssue(connection, REPO, new NewTask("Login", ""), LABELS))
         .thenReturn(task(1, "Login", true, null, 0));
     press(Actions.TASK_NEW);
     text("Login");
@@ -274,7 +281,7 @@ class TaskDialogTest {
     press(Actions.TASK_CONFIRM);
 
     assertThat(confirm.html()).contains("<i>tavsifsiz</i>");
-    verify(api).createIssue(connection, REPO.id(), new NewTask("Login", ""), LABELS);
+    verify(api).createIssue(connection, REPO, new NewTask("Login", ""), LABELS);
   }
 
   @Test
@@ -302,7 +309,7 @@ class TaskDialogTest {
         conversation.transcript(
             USER, "Login sahifasini tuzat. Parol tiklansin", OptionalLong.of(id));
     NewTask edited = new NewTask("Login tuzatish", "Login sahifasini tuzat. Parol tiklansin");
-    when(api.createIssue(connection, REPO.id(), edited, LABELS))
+    when(api.createIssue(connection, REPO, edited, LABELS))
         .thenReturn(task(4, "Login tuzatish", true, null, 0));
 
     Reply draft = press(actions(transcript).getFirst());
@@ -316,7 +323,7 @@ class TaskDialogTest {
         .contains("<b>Login sahifasini tuzat</b>\n\nLogin sahifasini tuzat. Parol tiklansin");
     assertThat(askEdit.html()).contains("Hozirgi:\n<code>Login sahifasini tuzat</code>");
     assertThat(confirm.html()).contains("<b>Login tuzatish</b>");
-    verify(api).createIssue(connection, REPO.id(), edited, LABELS);
+    verify(api).createIssue(connection, REPO, edited, LABELS);
   }
 
   @Test
@@ -344,7 +351,7 @@ class TaskDialogTest {
 
     assertThat(discarded.html()).isEqualTo("✖️ Task yaratilmadi.");
     assertThat(press(Actions.TASK_CONFIRM).screen().html()).startsWith("ℹ️ Qoralama topilmadi");
-    verify(api, never()).createIssue(any(), anyLong(), any(), any());
+    verify(api, never()).createIssue(any(), any(), any(), any());
   }
 
   @Test

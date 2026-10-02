@@ -16,15 +16,16 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
-import com.alex.voicedevbot.domain.GitLabNamespace;
-import com.alex.voicedevbot.domain.GitLabRepo;
-import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
+import com.alex.voicedevbot.domain.AccessToken;
 import com.alex.voicedevbot.domain.MergeRequest;
+import com.alex.voicedevbot.domain.Namespace;
 import com.alex.voicedevbot.domain.NewTask;
+import com.alex.voicedevbot.domain.Provider;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.Repo;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TokenInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -47,12 +48,15 @@ import org.junit.jupiter.params.provider.CsvSource;
 /** GitLab REST API v4 bilan protokol darajasida — WireMock'dagi soxta GitLab. */
 class GitLabHttpApiIntegrationTest {
 
-  private static final GitLabToken TOKEN = new GitLabToken("glpat-secretToken1234");
+  private static final AccessToken TOKEN = new AccessToken("glpat-secretToken1234");
   private static final String REPO_JSON =
       """
       {"id": 42, "path_with_namespace": "alex/elt-imzo",
        "web_url": "https://gitlab.example/alex/elt-imzo", "name": "elt-imzo"}
       """;
+
+  private static final Repo REPO_42 =
+      new Repo(42, "alex/elt-imzo", URI.create("https://gitlab.example/alex/elt-imzo"));
 
   @RegisterExtension
   static WireMockExtension gitLab =
@@ -60,14 +64,15 @@ class GitLabHttpApiIntegrationTest {
 
   private final GitLabHttpApi api =
       new GitLabHttpApi(HttpClient.newHttpClient(), Duration.ofSeconds(5));
-  private GitLabAddress address;
-  private GitLabConnection connection;
+  private ServerAddress address;
+  private ProviderConnection connection;
 
   @BeforeEach
   void setUp() {
-    address = GitLabAddress.parse(gitLab.baseUrl());
+    address = ServerAddress.parse(gitLab.baseUrl());
     connection =
-        new GitLabConnection(1, address, TOKEN, TokenInfo.withoutExpiry("alex", Set.of("api")));
+        new ProviderConnection(
+            1, Provider.GITLAB, address, TOKEN, TokenInfo.withoutExpiry("alex", Set.of("api")));
   }
 
   @Test
@@ -108,8 +113,7 @@ class GitLabHttpApiIntegrationTest {
 
     assertThat(repos)
         .containsExactly(
-            new GitLabRepo(
-                42, "alex/elt-imzo", URI.create("https://gitlab.example/alex/elt-imzo")));
+            new Repo(42, "alex/elt-imzo", URI.create("https://gitlab.example/alex/elt-imzo")));
     gitLab.verify(
         getRequestedFor(
             urlEqualTo(
@@ -138,9 +142,9 @@ class GitLabHttpApiIntegrationTest {
 
     assertThat(api.namespaces(connection))
         .containsExactly(
-            new GitLabNamespace(7, "alex", true),
-            new GitLabNamespace(8, "akfa", false),
-            new GitLabNamespace(9, "akfa/backend", false));
+            new Namespace(7, "alex", true),
+            new Namespace(8, "akfa", false),
+            new Namespace(9, "akfa/backend", false));
   }
 
   @Test
@@ -148,7 +152,7 @@ class GitLabHttpApiIntegrationTest {
     gitLab.stubFor(post("/api/v4/projects").willReturn(okJson(REPO_JSON)));
     gitLab.stubFor(post("/api/v4/projects/42/repository/commits").willReturn(okJson("{}")));
 
-    GitLabRepo repo =
+    Repo repo =
         api.createRepo(
             connection, 7, "elt-imzo", Map.of("docs/roadmap.md", "# R", "CLAUDE.md", "# C"));
 
@@ -198,7 +202,7 @@ class GitLabHttpApiIntegrationTest {
 
     assertThatThrownBy(() -> api.findRepo(connection, 42))
         .isInstanceOfSatisfying(
-            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(reason))
+            IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(reason))
         .hasMessage("GET /projects/42 returned HTTP " + status)
         .message()
         .doesNotContain(TOKEN.value());
@@ -207,19 +211,20 @@ class GitLabHttpApiIntegrationTest {
   @Test
   void should_report_invalid_json_and_unreachable_server_as_unavailable() {
     gitLab.stubFor(get("/api/v4/projects/42").willReturn(aResponse().withBody("<html>")));
-    GitLabConnection unreachable =
-        new GitLabConnection(
+    ProviderConnection unreachable =
+        new ProviderConnection(
             1,
-            GitLabAddress.parse("http://127.0.0.1:1"),
+            Provider.GITLAB,
+            ServerAddress.parse("http://127.0.0.1:1"),
             TOKEN,
             TokenInfo.withoutExpiry("alex", Set.of("api")));
 
     assertThatThrownBy(() -> api.findRepo(connection, 42))
         .isInstanceOfSatisfying(
-            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAVAILABLE));
+            IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAVAILABLE));
     assertThatThrownBy(() -> api.findRepo(unreachable, 42))
         .isInstanceOfSatisfying(
-            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAVAILABLE));
+            IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAVAILABLE));
   }
 
   private static String issueJson(int iid, String state, String dueDate, int mergeRequests) {
@@ -251,8 +256,8 @@ class GitLabHttpApiIntegrationTest {
                         + issueJson(102, "opened", null, 0)
                         + "]")));
 
-    List<Task> all = api.issues(connection, 42, 500);
-    List<Task> limited = api.issues(connection, 42, 101);
+    List<Task> all = api.issues(connection, REPO_42, 500);
+    List<Task> limited = api.issues(connection, REPO_42, 101);
 
     assertThat(all).hasSize(102);
     assertThat(all.get(100))
@@ -282,8 +287,8 @@ class GitLabHttpApiIntegrationTest {
                      {"iid": 5, "title": "Wip", "state": "locked", "web_url": "https://mr/5"}]
                     """)));
 
-    assertThat(api.issue(connection, 42, 7).open()).isTrue();
-    assertThat(api.mergeRequests(connection, 42, 7))
+    assertThat(api.issue(connection, REPO_42, 7).open()).isTrue();
+    assertThat(api.mergeRequests(connection, REPO_42, 7))
         .extracting(MergeRequest::state)
         .containsExactly(
             MergeRequest.State.MERGED, MergeRequest.State.CLOSED, MergeRequest.State.OPENED);
@@ -295,7 +300,8 @@ class GitLabHttpApiIntegrationTest {
         post("/api/v4/projects/42/issues").willReturn(okJson(issueJson(8, "opened", null, 0))));
 
     Task created =
-        api.createIssue(connection, 42, new NewTask("Login", "Parol"), List.of("ai-task", "bot"));
+        api.createIssue(
+            connection, REPO_42, new NewTask("Login", "Parol"), List.of("ai-task", "bot"));
 
     assertThat(created.iid()).isEqualTo(8);
     gitLab.verify(
@@ -312,7 +318,7 @@ class GitLabHttpApiIntegrationTest {
     gitLab.stubFor(
         put("/api/v4/projects/42/issues/7").willReturn(okJson(issueJson(7, state, null, 0))));
 
-    Task task = api.setIssueOpen(connection, 42, 7, open);
+    Task task = api.setIssueOpen(connection, REPO_42, 7, open);
 
     assertThat(task.open()).isEqualTo(open);
     gitLab.verify(
@@ -335,9 +341,9 @@ class GitLabHttpApiIntegrationTest {
         get("/api/v4/projects/42/repository/tree?recursive=false&per_page=100&page=1")
             .willReturn(okJson("[{\"path\": \"CLAUDE.md\", \"type\": \"blob\"}]")));
 
-    assertThat(api.files(connection, 42, "docs", true))
+    assertThat(api.files(connection, REPO_42, "docs", true))
         .containsExactly("docs/specs/001-login.md", "docs/roadmap.md");
-    assertThat(api.files(connection, 42, "", false)).containsExactly("CLAUDE.md");
+    assertThat(api.files(connection, REPO_42, "", false)).containsExactly("CLAUDE.md");
   }
 
   @Test
@@ -347,7 +353,7 @@ class GitLabHttpApiIntegrationTest {
             .willReturn(
                 aResponse().withStatus(404).withBody("{\"message\": \"404 Tree Not Found\"}")));
 
-    assertThat(api.files(connection, 42, "docs", true)).isEmpty();
+    assertThat(api.files(connection, REPO_42, "docs", true)).isEmpty();
   }
 
   @Test
@@ -356,7 +362,7 @@ class GitLabHttpApiIntegrationTest {
         get("/api/v4/projects/42/repository/files/docs%2Fmy%20notes.md/raw")
             .willReturn(aResponse().withBody("# Eslatma\n<b>")));
 
-    assertThat(api.readFile(connection, 42, "docs/my notes.md")).contains("# Eslatma\n<b>");
+    assertThat(api.readFile(connection, REPO_42, "docs/my notes.md")).contains("# Eslatma\n<b>");
   }
 
   @Test
@@ -368,10 +374,10 @@ class GitLabHttpApiIntegrationTest {
         get("/api/v4/projects/42/repository/files/README.md/raw")
             .willReturn(aResponse().withStatus(403)));
 
-    assertThat(api.readFile(connection, 42, "CLAUDE.md")).isEmpty();
-    assertThatThrownBy(() -> api.readFile(connection, 42, "README.md"))
+    assertThat(api.readFile(connection, REPO_42, "CLAUDE.md")).isEmpty();
+    assertThatThrownBy(() -> api.readFile(connection, REPO_42, "README.md"))
         .isInstanceOfSatisfying(
-            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.FORBIDDEN));
+            IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.FORBIDDEN));
   }
 
   @Test
@@ -380,8 +386,14 @@ class GitLabHttpApiIntegrationTest {
         get(urlPathEqualTo("/api/v4/projects/42/repository/tree"))
             .willReturn(aResponse().withStatus(401)));
 
-    assertThatThrownBy(() -> api.files(connection, 42, "", false))
+    assertThatThrownBy(() -> api.files(connection, REPO_42, "", false))
         .isInstanceOfSatisfying(
-            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAUTHORIZED));
+            IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAUTHORIZED));
+  }
+
+  @Test
+  void should_build_api_url_under_server_path() {
+    assertThat(GitLabHttpApi.api(ServerAddress.parse("http://10.0.0.5/gitlab"), "/user"))
+        .isEqualTo(URI.create("http://10.0.0.5/gitlab/api/v4/user"));
   }
 }

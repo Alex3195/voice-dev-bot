@@ -1,50 +1,67 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabNamespace;
-import com.alex.voicedevbot.domain.GitLabRepo;
+import com.alex.voicedevbot.domain.Namespace;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
+import com.alex.voicedevbot.domain.Repo;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/** GitLab ulanishlari va project repo'si ekranlari. Holatsiz, faqat ko'rinish. */
-final class GitLabScreens {
+/** Xizmatlarga ulanishlar va project repo'si ekranlari. Holatsiz, faqat ko'rinish. */
+final class ConnectionScreens {
 
-  static final Button BACK_TO_LIST = new Button("⬅️ Orqaga", Actions.GITLAB);
+  static final Button BACK_TO_LIST = new Button("⬅️ Orqaga", Actions.CONNECTIONS);
 
-  private GitLabScreens() {}
+  private ConnectionScreens() {}
 
-  static Screen list(List<ConnectionView> connections) {
+  /**
+   * @param providers bot ulana oladigan xizmatlar
+   */
+  static Screen list(List<ConnectionView> connections, List<Provider> providers) {
     List<List<Button>> rows = new ArrayList<>();
     for (ConnectionView view : connections) {
       rows.add(
           List.of(
               new Button(
-                  statusIcon(view) + " " + view.connection().label(),
-                  Actions.GITLAB_SHOW + view.id())));
+                  statusIcon(view) + " " + icon(view) + " " + view.connection().label(),
+                  Actions.CONNECTION_SHOW + view.id())));
     }
-    rows.add(List.of(new Button("➕ Ulanish qo'shish", Actions.GITLAB_ADD)));
+    rows.add(List.of(new Button("➕ Ulanish qo'shish", Actions.CONNECTION_ADD)));
     rows.add(List.of(new Button("⬅️ Orqaga", Actions.SETTINGS)));
     String body =
         connections.isEmpty()
-            ? "Hali ulanish yo'q. gitlab.com yoki o'z serveringizni ulang — projectlar shu orqali"
-                + " repo'ga bog'lanadi."
-            : connections.stream().map(GitLabScreens::summary).collect(Collectors.joining("\n"));
-    return new Screen("🔗 <b>GitLab ulanishlari</b>\n\n" + body, rows);
+            ? "Hali ulanish yo'q. "
+                + providers.stream()
+                    .map(Provider::displayName)
+                    .collect(Collectors.joining(" yoki "))
+                + " tokenini qo'shing — projectlar shu orqali repo'ga bog'lanadi."
+            : connections.stream()
+                .map(ConnectionScreens::summary)
+                .collect(Collectors.joining("\n"));
+    return new Screen(
+        "🔗 <b>Ulanishlar</b>\n\n"
+            + body
+            + "\n\n<i>Bitta token shu serverdagi barcha projectlar uchun ishlatiladi.</i>",
+        rows);
   }
 
   static Screen detail(ConnectionView view) {
     TokenInfo info = view.connection().info();
     String html =
         "🔗 <b>"
+            + icon(view)
+            + " "
+            + view.connection().provider().displayName()
+            + " · "
             + Html.escape(view.connection().address().label())
             + "</b>\n\n👤 @"
             + Html.escape(info.owner())
@@ -58,8 +75,8 @@ final class GitLabScreens {
         html,
         List.of(
             List.of(
-                new Button("🔑 Tokenni yangilash", Actions.GITLAB_RENEW + view.id()),
-                new Button("🗑 O'chirish", Actions.GITLAB_REMOVE_ASK + view.id())),
+                new Button("🔑 Tokenni yangilash", Actions.CONNECTION_RENEW + view.id()),
+                new Button("🗑 O'chirish", Actions.CONNECTION_REMOVE_ASK + view.id())),
             List.of(BACK_TO_LIST)));
   }
 
@@ -68,35 +85,53 @@ final class GitLabScreens {
         "🗑 "
             + Html.bold(view.connection().label())
             + " ulanishini o'chirasizmi?\n\nUnga bog'langan projectlarning repo havolasi ham"
-            + " o'chadi. GitLab'dagi repo'lar o'zgarmaydi.",
+            + " o'chadi. "
+            + view.connection().provider().displayName()
+            + "dagi repo'lar o'zgarmaydi.",
         List.of(
             List.of(
-                new Button("🗑 Ha, o'chirish", Actions.GITLAB_REMOVE + view.id()),
-                new Button("⬅️ Yo'q", Actions.GITLAB_SHOW + view.id()))));
+                new Button("🗑 Ha, o'chirish", Actions.CONNECTION_REMOVE + view.id()),
+                new Button("⬅️ Yo'q", Actions.CONNECTION_SHOW + view.id()))));
   }
 
-  static Screen chooseServer() {
-    return new Screen(
-        "➕ <b>GitLab ulash</b>\n\nQaysi serverga ulanamiz?",
-        List.of(
-            List.of(new Button("🦊 gitlab.com", Actions.GITLAB_COM)),
-            List.of(new Button("✍️ Boshqa manzil (self-hosted)", Actions.GITLAB_OTHER)),
-            List.of(BotScreens.CANCEL)));
+  /** Har xizmatning standart serveri; o'z serverini ulash mumkin bo'lsa — alohida tugma. */
+  static Screen chooseProvider(List<Provider> providers) {
+    List<List<Button>> rows = new ArrayList<>();
+    for (Provider provider : providers) {
+      rows.add(
+          List.of(
+              new Button(
+                  icon(provider) + " " + provider.defaultAddress().label(),
+                  Actions.connectDefault(provider))));
+      if (provider.selfHosted()) {
+        rows.add(
+            List.of(
+                new Button(
+                    "✍️ " + provider.displayName() + " — o'z serveri (self-hosted)",
+                    Actions.connectOther(provider))));
+      }
+    }
+    rows.add(List.of(BotScreens.CANCEL));
+    return new Screen("➕ <b>Ulanish qo'shish</b>\n\nQaysi xizmatga ulanamiz?", rows);
   }
 
-  static Screen askAddress() {
+  static Screen askAddress(Provider provider) {
     return new Screen(
-        "✍️ GitLab server manzilini yozing.\n<i>Masalan: git.example.uz yoki"
+        "✍️ "
+            + provider.displayName()
+            + " server manzilini yozing.\n<i>Masalan: git.example.uz yoki"
             + " http://100.64.0.5/gitlab</i>",
         List.of(List.of(BotScreens.CANCEL)));
   }
 
-  static Screen askToken(GitLabAddress address) {
+  static Screen askToken(Provider provider, ServerAddress address) {
     return new Screen(
         "🔑 <b>"
+            + icon(provider)
+            + " "
             + Html.escape(address.label())
             + "</b> uchun token yuboring.\n\n"
-            + tokenHowTo(address),
+            + tokenHowTo(provider, address),
         List.of(List.of(BotScreens.CANCEL)));
   }
 
@@ -107,46 +142,49 @@ final class GitLabScreens {
             + "</b> uchun yangi token yuboring.\n"
             + expiry(view)
             + "\n\n"
-            + tokenHowTo(view.connection().address()),
+            + tokenHowTo(view.connection().provider(), view.connection().address()),
         List.of(List.of(BotScreens.CANCEL)));
   }
 
   static Screen tokenAlert(ConnectionView view) {
     String title =
         switch (view.status()) {
-          case EXPIRED -> "⛔ <b>GitLab tokeni tugagan</b>";
-          case EXPIRING_SOON, ACTIVE -> "⚠️ <b>GitLab tokeni tugayapti</b>";
+          case EXPIRED ->
+              "⛔ <b>" + view.connection().provider().displayName() + " tokeni tugagan</b>";
+          case EXPIRING_SOON, ACTIVE ->
+              "⚠️ <b>" + view.connection().provider().displayName() + " tokeni tugayapti</b>";
         };
     return new Screen(
         title + "\n\n" + Html.escape(view.connection().label()) + "\n" + expiry(view),
-        List.of(List.of(new Button("🔑 Tokenni yangilash", Actions.GITLAB_RENEW + view.id()))));
+        List.of(List.of(new Button("🔑 Tokenni yangilash", Actions.CONNECTION_RENEW + view.id()))));
   }
 
-  static String problem(GitLabProblem problem) {
+  static String problem(ConnectionProblem problem) {
     return switch (problem) {
       case INVALID_ADDRESS ->
           "⚠️ Manzil noto'g'ri. Masalan: gitlab.com yoki https://git.example.uz";
       case INVALID_TOKEN_FORMAT ->
-          "⚠️ Bu token'ga o'xshamaydi. GitLab token odatda glpat- bilan boshlanadi.";
-      case TOKEN_REJECTED ->
-          "⚠️ GitLab tokenni qabul qilmadi: noto'g'ri, bekor qilingan yoki tugagan.";
+          "⚠️ Bu token'ga o'xshamaydi. GitLab token odatda <code>glpat-</code>, GitHub —"
+              + " <code>github_pat_</code> yoki <code>ghp_</code> bilan boshlanadi.";
+      case TOKEN_REJECTED -> "⚠️ Token qabul qilinmadi: noto'g'ri, bekor qilingan yoki tugagan.";
       case MISSING_SCOPE ->
-          "⚠️ Token'da <code>api</code> ruxsati yo'q. Yangi token yarating va <code>api</code>ni"
-              + " belgilang.";
+          "⚠️ Token'da kerakli ruxsat yo'q (GitLab: <code>api</code>, GitHub classic:"
+              + " <code>repo</code>). Yangi token yarating va ruxsatni belgilang.";
       case TOKEN_EXPIRED -> "⚠️ Bu tokenning muddati tugagan.";
       case OTHER_OWNER ->
-          "⚠️ Bu token boshqa GitLab foydalanuvchisiniki. Uni ➕ yangi ulanish sifatida qo'shing.";
-      case UNREACHABLE -> "⚠️ GitLab serveriga ulanib bo'lmadi. Manzil va tarmoqni tekshiring.";
-      case FORBIDDEN -> "⚠️ GitLab bu amalga ruxsat bermadi (huquq yetmaydi).";
+          "⚠️ Bu token boshqa foydalanuvchiniki. Uni ➕ yangi ulanish sifatida qo'shing.";
+      case UNREACHABLE -> "⚠️ Serverga ulanib bo'lmadi. Manzil va tarmoqni tekshiring.";
+      case FORBIDDEN -> "⚠️ Xizmat bu amalga ruxsat bermadi (huquq yetmaydi).";
       case NOT_FOUND -> "⚠️ Topilmadi — o'chirilgan bo'lishi mumkin.";
       case INVALID_REPO_NAME ->
           "⚠️ Repo nomi noto'g'ri: faqat harf, raqam, bo'sh joy va <code>_ . -</code>, 100 belgigacha.";
       case REPO_EXISTS -> "⚠️ Bu joyda shu nomli repo allaqachon bor. Boshqa nom yozing.";
+      case UNSUPPORTED -> "⚠️ Bu xizmat hali qo'llab-quvvatlanmaydi.";
     };
   }
 
   static Screen linked(RepoLinkResult.Linked linked) {
-    GitLabRepo repo = linked.link().repo();
+    Repo repo = linked.link().repo();
     String html =
         "🔗 "
             + Html.bold(linked.project().value())
@@ -171,25 +209,25 @@ final class GitLabScreens {
     List<List<Button>> rows = new ArrayList<>();
     boolean several = connections.size() > 1;
     for (ConnectionView view : connections) {
-      String suffix = several ? " · " + view.connection().address().label() : "";
+      String suffix = several ? " · " + icon(view) + " " + view.connection().label() : "";
       rows.add(
           List.of(new Button("📂 Mavjud repo'ni tanlash" + suffix, Actions.REPO_PICK + view.id())));
       rows.add(List.of(new Button("➕ Yangi repo yaratish" + suffix, Actions.REPO_NEW + view.id())));
     }
     if (connections.isEmpty()) {
-      rows.add(List.of(new Button("🔗 GitLab ulash", Actions.GITLAB_ADD)));
+      rows.add(List.of(new Button("🔗 Ulanish qo'shish", Actions.CONNECTION_ADD)));
     }
     rows.add(List.of(new Button("⏭ Keyinroq", Actions.selectProject(project.key()))));
     String body =
         connections.isEmpty()
-            ? "Avval GitLab ulang — keyin repo tanlaysiz yoki yaratasiz."
-            : "Tasklar (GitLab Issue) va hujjatlar shu repo'da bo'ladi.";
+            ? "Avval GitLab yoki GitHub tokenini qo'shing — keyin repo tanlaysiz yoki yaratasiz."
+            : "Tasklar (Issue) va hujjatlar shu repo'da bo'ladi.";
     return new Screen("🔗 " + Html.bold(project.value()) + " — repo ulash\n\n" + body, rows);
   }
 
   static Screen repos(RepoLinkResult.Repos found) {
     List<List<Button>> rows = new ArrayList<>();
-    for (GitLabRepo repo : found.repos()) {
+    for (Repo repo : found.repos()) {
       rows.add(
           List.of(
               new Button(
@@ -210,7 +248,7 @@ final class GitLabScreens {
 
   static Screen namespaces(RepoLinkResult.Namespaces found) {
     List<List<Button>> rows = new ArrayList<>();
-    for (GitLabNamespace namespace : found.namespaces()) {
+    for (Namespace namespace : found.namespaces()) {
       String icon = namespace.personal() ? "👤 " : "👥 ";
       rows.add(
           List.of(
@@ -259,7 +297,7 @@ final class GitLabScreens {
               new Screen(
                   "🔗 "
                       + Html.bold(project.value())
-                      + " hali GitLab repo'ga ulanmagan.\nTasklar (Issue) va hujjatlar shu repo'da"
+                      + " hali repo'ga ulanmagan.\nTasklar (Issue) va hujjatlar shu repo'da"
                       + " saqlanadi.",
                   List.of(
                       List.of(new Button("🔗 Repo ulash", Actions.REPO)),
@@ -285,7 +323,24 @@ final class GitLabScreens {
   }
 
   private static String summary(ConnectionView view) {
-    return statusIcon(view) + " " + Html.escape(view.connection().label()) + " — " + expiry(view);
+    return statusIcon(view)
+        + " "
+        + icon(view)
+        + " "
+        + Html.escape(view.connection().label())
+        + " — "
+        + expiry(view);
+  }
+
+  static String icon(Provider provider) {
+    return switch (provider) {
+      case GITLAB -> "🦊";
+      case GITHUB -> "🐙";
+    };
+  }
+
+  private static String icon(ConnectionView view) {
+    return icon(view.connection().provider());
   }
 
   private static String statusIcon(ConnectionView view) {
@@ -305,17 +360,36 @@ final class GitLabScreens {
     };
   }
 
-  /** GitLab token yaratish sahifasiga nom va {@code api} ruxsati oldindan to'ldirilgan havola. */
-  private static String tokenHowTo(GitLabAddress address) {
-    String url =
-        address.uri()
-            + "/-/user_settings/personal_access_tokens?name=voice-dev-bot&scopes="
-            + TokenInfo.REQUIRED_SCOPE;
-    return "1. <a href=\""
-        + Html.escape(url)
-        + "\">Token yaratish sahifasi</a> (nom va <code>api</code> ruxsati tayyor)\n"
-        + "2. Muddatini tanlang → <b>Create</b>\n"
+  /** Token yaratish sahifasiga havola; GitLab'da nom va ruxsat oldindan to'ldirilgan. */
+  private static String tokenHowTo(Provider provider, ServerAddress address) {
+    String steps =
+        switch (provider) {
+          case GITLAB -> {
+            String scope = provider.requiredScope().orElseThrow();
+            String url =
+                address.uri()
+                    + "/-/user_settings/personal_access_tokens?name=voice-dev-bot&scopes="
+                    + scope;
+            yield "1. <a href=\""
+                + Html.escape(url)
+                + "\">Token yaratish sahifasi</a> (nom va <code>"
+                + scope
+                + "</code> ruxsati tayyor)\n"
+                + "2. Muddatini tanlang → <b>Create</b>\n";
+          }
+          case GITHUB ->
+              "1. <a href=\"https://github.com/settings/personal-access-tokens/new\">Fine-grained"
+                  + " token yaratish</a>: muddat, <b>Repository access → All repositories</b>\n"
+                  + "2. <b>Permissions</b>: Contents, Issues, Pull requests — <i>Read and write</i>;"
+                  + " Administration — <i>Read and write</i> (yangi repo yaratish uchun) →"
+                  + " <b>Generate token</b>\n"
+                  + "<i>Yoki <a href=\"https://github.com/settings/tokens/new?scopes=repo&amp;"
+                  + "description=voice-dev-bot\">classic token</a> — <code>repo</code> ruxsati"
+                  + " bilan.</i>\n";
+        };
+    return steps
         + "3. Tokenni nusxalab shu yerga yuboring\n\n"
-        + "🔒 Token shifrlab saqlanadi, xabaringiz chatdan darhol o'chiriladi.";
+        + "🔒 Token shifrlab saqlanadi, xabaringiz chatdan darhol o'chiriladi. Muddati tugaguncha"
+        + " shu serverdagi barcha projectlar uchun ishlatiladi.";
   }
 }

@@ -1,6 +1,6 @@
 package com.alex.voicedevbot.domain;
 
-/** Task (GitLab Issue) holati; ro'yxatda shu tartibda guruhlanadi. */
+/** Task (Issue) holati; ro'yxatda shu tartibda guruhlanadi. */
 public enum TaskStatus {
   /** Ochiq, muddati o'tgan. */
   OVERDUE,
