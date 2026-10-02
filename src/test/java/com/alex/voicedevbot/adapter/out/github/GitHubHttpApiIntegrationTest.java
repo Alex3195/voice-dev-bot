@@ -118,6 +118,13 @@ class GitHubHttpApiIntegrationTest {
   }
 
   @Test
+  void should_find_repo_by_owner_and_name() {
+    gitHub.stubFor(get(urlEqualTo("/repos/alex/elt-imzo")).willReturn(okJson(REPO_JSON)));
+
+    assertThat(api.findRepo(connection, "alex/elt-imzo")).isEqualTo(REPO);
+  }
+
+  @Test
   void should_filter_recent_repos_by_name() {
     gitHub.stubFor(
         get(urlPathEqualTo("/user/repos"))

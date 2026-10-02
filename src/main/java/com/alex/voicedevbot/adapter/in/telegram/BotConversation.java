@@ -117,10 +117,12 @@ public class BotConversation {
   /** Inline tugma bosildi. */
   Optional<Reply> onButton(TelegramUserId user, String data) {
     pending.remove(user);
-    connections.cancel(user);
     tasks.cancel(user);
     boolean asNewMessage = data.startsWith(Actions.NEW_MESSAGE);
     String action = asNewMessage ? data.substring(Actions.NEW_MESSAGE.length()) : data;
+    if (!ConnectionsDialog.handles(action)) {
+      connections.cancel(user);
+    }
     if (action.startsWith(Actions.SELECT_PROJECT) && !action.equals(Actions.NEW_PROJECT)) {
       return selectProjectById(user, action.substring(Actions.SELECT_PROJECT.length()));
     }
@@ -130,7 +132,7 @@ public class BotConversation {
     if (action.startsWith(Actions.SET_LANGUAGE)) {
       return changeLanguage(user, action.substring(Actions.SET_LANGUAGE.length()));
     }
-    if (action.equals(Actions.CONNECTIONS) || action.startsWith(Actions.CONNECTION_PREFIX)) {
+    if (ConnectionsDialog.handles(action)) {
       return connections.onButton(user, action);
     }
     if (TaskDialog.handles(action)) {

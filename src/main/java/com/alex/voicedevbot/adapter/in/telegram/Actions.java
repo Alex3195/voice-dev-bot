@@ -47,6 +47,8 @@ final class Actions {
   static final String REPO_NEW = "cn:new:";
   static final String REPO_NAMESPACE = "cn:ns:";
   static final String REPO_UNLINK = "cn:unlink";
+  static final String REPO_URL = "cn:url";
+  static final String REPO_URL_PROVIDER = "cn:up:";
 
   static final String TASKS = "tk";
   static final String TASK_PREFIX = "tk:";
@@ -103,6 +105,11 @@ final class Actions {
   /** O'z serveringiz (self-hosted): avval manzil so'raladi. */
   static String connectOther(Provider provider) {
     return CONNECTION_OTHER + provider.name();
+  }
+
+  /** Havoladagi notanish server shu xizmatniki — unga token so'raladi. */
+  static String repoUrlProvider(Provider provider) {
+    return REPO_URL_PROVIDER + provider.name();
   }
 
   /**

@@ -2,8 +2,10 @@ package com.alex.voicedevbot.application.port.in;
 
 import com.alex.voicedevbot.domain.Namespace;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import java.util.List;
 import java.util.Objects;
 
@@ -37,6 +39,21 @@ public sealed interface RepoLinkResult {
 
     public Namespaces {
       namespaces = List.copyOf(namespaces);
+    }
+  }
+
+  /**
+   * Havoladagi server uchun ulanish yo'q — avval token qo'shiladi, keyin repo ulanadi.
+   *
+   * @param providers shu server bo'lishi mumkin bo'lgan xizmatlar: bulutdagi server ({@code
+   *     github.com}) — bitta, notanish server — o'z serveriga o'rnatiladiganlar
+   */
+  record NeedsConnection(ServerAddress address, List<Provider> providers)
+      implements RepoLinkResult {
+
+    public NeedsConnection {
+      Objects.requireNonNull(address, "address");
+      providers = List.copyOf(providers);
     }
   }
 

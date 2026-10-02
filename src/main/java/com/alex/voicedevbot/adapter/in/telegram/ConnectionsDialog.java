@@ -8,6 +8,7 @@ import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
 import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
 import com.alex.voicedevbot.domain.Provider;
+import com.alex.voicedevbot.domain.RepoUrl;
 import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import java.util.Arrays;
@@ -33,9 +34,15 @@ public class ConnectionsDialog {
   private sealed interface Awaiting {
     record Address(Provider provider) implements Awaiting {}
 
-    record Token(Provider provider, ServerAddress address) implements Awaiting {}
+    /**
+     * @param repoUrl ulanish saqlangach shu havoladagi repo ulanadi
+     */
+    record Token(Provider provider, ServerAddress address, Optional<String> repoUrl)
+        implements Awaiting {}
 
-    record RenewedToken(long connectionId) implements Awaiting {}
+    record RenewedToken(long connectionId, Optional<String> repoUrl) implements Awaiting {}
+
+    record LinkUrl() implements Awaiting {}
 
     record RepoQuery(long connectionId) implements Awaiting {}
 
@@ -46,9 +53,16 @@ public class ConnectionsDialog {
   private final LinkRepoUseCase repos;
   private final Map<TelegramUserId, Awaiting> awaiting = new ConcurrentHashMap<>();
 
+  /** Ulanish kutayotgan repo havolasi: xizmat tanlanguncha yoki token yangilanguncha. */
+  private final Map<TelegramUserId, String> pendingRepoUrl = new ConcurrentHashMap<>();
+
   public ConnectionsDialog(ManageConnectionsUseCase manager, LinkRepoUseCase repos) {
     this.manager = Objects.requireNonNull(manager, "manager");
     this.repos = Objects.requireNonNull(repos, "repos");
+  }
+
+  static boolean handles(String action) {
+    return action.equals(Actions.CONNECTIONS) || action.startsWith(Actions.CONNECTION_PREFIX);
   }
 
   boolean awaitsInput(TelegramUserId user) {
@@ -63,6 +77,7 @@ public class ConnectionsDialog {
 
   void cancel(TelegramUserId user) {
     awaiting.remove(user);
+    pendingRepoUrl.remove(user);
   }
 
   /** Project kartochkasidagi repo tugmasi; whitelist'dan tashqarida yoki project yo'q — bo'sh. */
@@ -75,7 +90,8 @@ public class ConnectionsDialog {
 
   Optional<Reply> onButton(TelegramUserId user, String action) {
     awaiting.remove(user);
-    return screenFor(user, action).map(screen -> new Reply(screen, false, ""));
+    Optional<String> repoUrl = Optional.ofNullable(pendingRepoUrl.remove(user));
+    return screenFor(user, action, repoUrl).map(screen -> new Reply(screen, false, ""));
   }
 
   Optional<Screen> onText(TelegramUserId user, String text) {
@@ -85,17 +101,22 @@ public class ConnectionsDialog {
     }
     String input = text.strip();
     return switch (current) {
-      case Awaiting.Address(var provider) -> askToken(user, provider, input);
-      case Awaiting.Token(var provider, var address) ->
-          describe(manager.add(user, provider, address.toString(), input));
-      case Awaiting.RenewedToken(var id) -> describe(manager.renew(user, id, input));
+      case Awaiting.Address(var provider) -> askToken(user, provider, input, Optional.empty());
+      case Awaiting.Token(var provider, var address, var repoUrl) ->
+          saved(user, manager.add(user, provider, address.toString(), input), repoUrl);
+      case Awaiting.RenewedToken(var id, var repoUrl) ->
+          saved(user, manager.renew(user, id, input), repoUrl);
+      case Awaiting.LinkUrl() -> linkByUrl(user, input);
       case Awaiting.RepoQuery(var id) -> searchRepos(user, id, input);
       case Awaiting.RepoName(var id, var namespace) ->
           describeRepo(repos.create(user, id, namespace, input), "✅ Repo yaratildi va ulandi");
     };
   }
 
-  private Optional<Screen> screenFor(TelegramUserId user, String action) {
+  /**
+   * @param repoUrl ulanish kutayotgan havola — xizmat tanlash va token yangilash tugmalari uchun
+   */
+  private Optional<Screen> screenFor(TelegramUserId user, String action, Optional<String> repoUrl) {
     return switch (action) {
       case Actions.CONNECTIONS -> describe(manager.list(user));
       case Actions.CONNECTION_ADD -> chooseProvider(user);
@@ -103,14 +124,22 @@ public class ConnectionsDialog {
       case Actions.REPO_CHOOSE -> chooseRepo(user);
       case Actions.REPO_UNLINK ->
           describeRepo(repos.unlink(user)).map(screen -> screen.withNotice("❌ Repo uzildi"));
-      default -> withArgument(user, action);
+      case Actions.REPO_URL -> askRepoUrl(user);
+      default -> withArgument(user, action, repoUrl);
     };
   }
 
-  private Optional<Screen> withArgument(TelegramUserId user, String action) {
+  private Optional<Screen> withArgument(
+      TelegramUserId user, String action, Optional<String> repoUrl) {
     if (action.startsWith(Actions.CONNECTION_DEFAULT)) {
       return provider(action, Actions.CONNECTION_DEFAULT)
-          .flatMap(provider -> askToken(user, provider, provider.defaultAddress().toString()));
+          .flatMap(
+              provider ->
+                  askToken(user, provider, provider.defaultAddress().toString(), Optional.empty()));
+    }
+    if (action.startsWith(Actions.REPO_URL_PROVIDER)) {
+      return provider(action, Actions.REPO_URL_PROVIDER)
+          .flatMap(provider -> askTokenForUrl(user, provider, repoUrl));
     }
     if (action.startsWith(Actions.CONNECTION_OTHER)) {
       return provider(action, Actions.CONNECTION_OTHER)
@@ -127,7 +156,7 @@ public class ConnectionsDialog {
       return id(action, Actions.CONNECTION_SHOW).flatMap(id -> describe(manager.show(user, id)));
     }
     if (action.startsWith(Actions.CONNECTION_RENEW)) {
-      return id(action, Actions.CONNECTION_RENEW).flatMap(id -> askRenewedToken(user, id));
+      return id(action, Actions.CONNECTION_RENEW).flatMap(id -> askRenewedToken(user, id, repoUrl));
     }
     if (action.startsWith(Actions.CONNECTION_REMOVE_ASK)) {
       return id(action, Actions.CONNECTION_REMOVE_ASK).flatMap(id -> confirmRemove(user, id));
@@ -159,7 +188,66 @@ public class ConnectionsDialog {
         : Optional.empty();
   }
 
-  private Optional<Screen> askToken(TelegramUserId user, Provider provider, String address) {
+  private Optional<Screen> askRepoUrl(TelegramUserId user) {
+    RepoLinkResult result = repos.show(user);
+    return result instanceof RepoLinkResult.Linked || result instanceof RepoLinkResult.NotLinked
+        ? await(user, new Awaiting.LinkUrl(), ConnectionScreens.askRepoUrl())
+        : describeRepo(result);
+  }
+
+  /**
+   * Ulanish yo'q bo'lsa: bulutdagi server — darhol token so'raladi, notanish server — avval xizmat.
+   * Token tugagan bo'lsa yangilash taklif qilinadi; ikkala holda ham havola eslab qolinadi.
+   */
+  private Optional<Screen> linkByUrl(TelegramUserId user, String url) {
+    RepoLinkResult result = repos.linkByUrl(user, url);
+    switch (result) {
+      case RepoLinkResult.NeedsConnection(var address, var providers)
+          when providers.size() == 1 && providers.getFirst().defaultAddress().equals(address) -> {
+        Provider provider = providers.getFirst();
+        return await(
+            user,
+            new Awaiting.Token(provider, address, Optional.of(url)),
+            ConnectionScreens.askToken(provider, address)
+                .withNotice(ConnectionScreens.noConnection(address)));
+      }
+      case RepoLinkResult.NeedsConnection unused -> pendingRepoUrl.put(user, url);
+      case RepoLinkResult.NeedsNewToken unused -> pendingRepoUrl.put(user, url);
+      case RepoLinkResult.Failed(var problem)
+          when problem == ConnectionProblem.INVALID_REPO_URL -> {
+        return await(
+            user,
+            new Awaiting.LinkUrl(),
+            ConnectionScreens.askRepoUrl().withNotice(ConnectionScreens.problem(problem)));
+      }
+      default -> {
+        // natija o'zi ko'rsatiladi
+      }
+    }
+    return describeRepo(result, "✅ Repo ulandi");
+  }
+
+  /** Notanish server uchun tanlangan xizmat: havoladagi serverga token so'raladi. */
+  private Optional<Screen> askTokenForUrl(
+      TelegramUserId user, Provider provider, Optional<String> repoUrl) {
+    if (repoUrl.isEmpty()) {
+      return describeRepo(repos.show(user));
+    }
+    ServerAddress address = RepoUrl.parse(repoUrl.get()).server();
+    return askToken(user, provider, address.toString(), repoUrl);
+  }
+
+  /** Ulanish saqlangach, kutilayotgan havola bo'lsa — repo ham ulanadi. */
+  private Optional<Screen> saved(
+      TelegramUserId user, ConnectionResult result, Optional<String> repoUrl) {
+    if (result instanceof ConnectionResult.Saved && repoUrl.isPresent()) {
+      return linkByUrl(user, repoUrl.get());
+    }
+    return describe(result);
+  }
+
+  private Optional<Screen> askToken(
+      TelegramUserId user, Provider provider, String address, Optional<String> repoUrl) {
     if (!isAllowed(user)) {
       return Optional.empty();
     }
@@ -174,15 +262,18 @@ public class ConnectionsDialog {
               .withNotice(ConnectionScreens.problem(ConnectionProblem.INVALID_ADDRESS)));
     }
     return await(
-        user, new Awaiting.Token(provider, parsed), ConnectionScreens.askToken(provider, parsed));
+        user,
+        new Awaiting.Token(provider, parsed, repoUrl),
+        ConnectionScreens.askToken(provider, parsed));
   }
 
-  private Optional<Screen> askRenewedToken(TelegramUserId user, long id) {
+  private Optional<Screen> askRenewedToken(TelegramUserId user, long id, Optional<String> repoUrl) {
     ConnectionResult result = manager.show(user, id);
     if (!(result instanceof ConnectionResult.Shown(var view))) {
       return describe(result);
     }
-    return await(user, new Awaiting.RenewedToken(id), ConnectionScreens.askRenewedToken(view));
+    return await(
+        user, new Awaiting.RenewedToken(id, repoUrl), ConnectionScreens.askRenewedToken(view));
   }
 
   private Optional<Screen> confirmRemove(TelegramUserId user, long id) {
@@ -246,6 +337,8 @@ public class ConnectionsDialog {
           Optional.of(ConnectionScreens.choose(project, connections));
       case RepoLinkResult.Repos found -> Optional.of(ConnectionScreens.repos(found));
       case RepoLinkResult.Namespaces found -> Optional.of(ConnectionScreens.namespaces(found));
+      case RepoLinkResult.NeedsConnection(var address, var providers) ->
+          Optional.of(ConnectionScreens.chooseServerProvider(address, providers));
       case RepoLinkResult.NeedsNewToken(var view) ->
           Optional.of(ConnectionScreens.needsNewToken(view));
       case RepoLinkResult.Failed(var problem) ->

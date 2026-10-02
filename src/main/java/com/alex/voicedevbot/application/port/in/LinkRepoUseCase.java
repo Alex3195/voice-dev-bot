@@ -13,6 +13,14 @@ public interface LinkRepoUseCase {
 
   RepoLinkResult link(TelegramUserId user, long connectionId, long repoId);
 
+  /**
+   * Havola bo'yicha: o'sha server uchun faol ulanish bo'lsa darhol ulanadi, yo'q bo'lsa — {@link
+   * RepoLinkResult.NeedsConnection}, tugagan bo'lsa — {@link RepoLinkResult.NeedsNewToken}.
+   *
+   * @param url foydalanuvchi yuborgan havola ({@code https://github.com/egasi/nomi})
+   */
+  RepoLinkResult linkByUrl(TelegramUserId user, String url);
+
   /** Private repo yaratiladi, ichiga agent qoidalari va {@code docs/} tuzilmasi qo'yiladi. */
   RepoLinkResult create(TelegramUserId user, long connectionId, long namespaceId, String name);
 

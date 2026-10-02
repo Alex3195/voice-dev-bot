@@ -25,6 +25,11 @@ public interface CodeHost {
 
   Repo findRepo(ProviderConnection connection, long repoId);
 
+  /**
+   * @param path namespace bilan to'liq yo'l, masalan {@code alex/elt-imzo}
+   */
+  Repo findRepo(ProviderConnection connection, String path);
+
   /** Repo yaratish mumkin bo'lgan joylar; shaxsiy namespace birinchi. */
   List<Namespace> namespaces(ProviderConnection connection);
 

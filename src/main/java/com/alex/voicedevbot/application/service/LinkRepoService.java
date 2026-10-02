@@ -11,13 +11,17 @@ import com.alex.voicedevbot.application.port.out.ProjectRepoLinks;
 import com.alex.voicedevbot.application.port.out.RepoTemplate;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.RepoUrl;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.TokenStatus;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
@@ -89,6 +93,30 @@ public class LinkRepoService implements LinkRepoUseCase {
   }
 
   @Override
+  public RepoLinkResult linkByUrl(TelegramUserId user, String url) {
+    return withProject(
+        user,
+        project -> {
+          RepoUrl parsed;
+          try {
+            parsed = RepoUrl.parse(url);
+          } catch (IllegalArgumentException e) {
+            return new RepoLinkResult.Failed(ConnectionProblem.INVALID_REPO_URL);
+          }
+          List<ProviderConnection> matching =
+              connections.findAll().stream()
+                  .filter(connection -> integrations.supports(connection.provider()))
+                  .filter(
+                      connection ->
+                          parsed.repoPath(connection.address(), connection.provider()).isPresent())
+                  .toList();
+          return matching.isEmpty()
+              ? needsConnection(parsed)
+              : linkFirstFound(project, parsed, matching);
+        });
+  }
+
+  @Override
   public RepoLinkResult create(
       TelegramUserId user, long connectionId, long namespaceId, String name) {
     String trimmed = name == null ? "" : name.strip();
@@ -122,6 +150,64 @@ public class LinkRepoService implements LinkRepoUseCase {
     RepoLink link = new RepoLink(connection.id(), repo);
     links.link(project, link);
     return new RepoLinkResult.Linked(project, link, view(connection));
+  }
+
+  /**
+   * Bulutdagi server ({@code github.com}) — o'sha xizmat; notanish server provayderi taxmin
+   * qilinmaydi — o'z serveriga o'rnatiladigan xizmatlardan foydalanuvchi tanlaydi.
+   */
+  private RepoLinkResult needsConnection(RepoUrl url) {
+    List<Provider> cloud =
+        integrations.supported().stream()
+            .filter(provider -> url.repoPath(provider.defaultAddress(), provider).isPresent())
+            .toList();
+    if (!cloud.isEmpty()) {
+      return new RepoLinkResult.NeedsConnection(cloud.getFirst().defaultAddress(), cloud);
+    }
+    boolean cloudHost =
+        Arrays.stream(Provider.values())
+            .anyMatch(provider -> url.repoPath(provider.defaultAddress(), provider).isPresent());
+    List<Provider> selfHosted =
+        cloudHost
+            ? List.of()
+            : integrations.supported().stream().filter(Provider::selfHosted).toList();
+    return selfHosted.isEmpty()
+        ? new RepoLinkResult.Failed(ConnectionProblem.UNSUPPORTED)
+        : new RepoLinkResult.NeedsConnection(url.server(), selfHosted);
+  }
+
+  /**
+   * Shu serverdagi tokenlar navbat bilan sinaladi: qaysi birida repo'ga ruxsat bo'lsa, o'sha bilan
+   * ulanadi. Hech birida topilmasa, lekin tugagan yoki rad etilgan token bo'lsa — yangilash taklif
+   * qilinadi.
+   */
+  private RepoLinkResult linkFirstFound(
+      ProjectName project, RepoUrl url, List<ProviderConnection> matching) {
+    Optional<ConnectionView> needsToken = Optional.empty();
+    for (ProviderConnection connection : matching) {
+      ConnectionView view = view(connection);
+      if (view.status() == TokenStatus.EXPIRED) {
+        needsToken = needsToken.or(() -> Optional.of(view));
+        continue;
+      }
+      String path = url.repoPath(connection.address(), connection.provider()).orElseThrow();
+      try {
+        return save(project, connection, code(connection).findRepo(connection, path));
+      } catch (IntegrationException e) {
+        switch (e.reason()) {
+          case UNAUTHORIZED -> needsToken = needsToken.or(() -> Optional.of(view));
+          case NOT_FOUND, FORBIDDEN -> {
+            // boshqa token bilan urinib ko'riladi
+          }
+          default -> {
+            return new RepoLinkResult.Failed(ConnectionProblems.of(e));
+          }
+        }
+      }
+    }
+    return needsToken
+        .<RepoLinkResult>map(RepoLinkResult.NeedsNewToken::new)
+        .orElseGet(() -> new RepoLinkResult.Failed(ConnectionProblem.REPO_NOT_FOUND));
   }
 
   private RepoLinkResult describe(ProjectName project) {

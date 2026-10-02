@@ -178,6 +178,10 @@ final class ConnectionScreens {
       case NOT_FOUND -> "⚠️ Topilmadi — o'chirilgan bo'lishi mumkin.";
       case INVALID_REPO_NAME ->
           "⚠️ Repo nomi noto'g'ri: faqat harf, raqam, bo'sh joy va <code>_ . -</code>, 100 belgigacha.";
+      case INVALID_REPO_URL ->
+          "⚠️ Havolani tushunmadim. Masalan: https://github.com/egasi/nomi yoki"
+              + " https://git.example.uz/guruh/nomi";
+      case REPO_NOT_FOUND -> "⚠️ Repo topilmadi: havola noto'g'ri yoki tokenda unga ruxsat yo'q.";
       case REPO_EXISTS -> "⚠️ Bu joyda shu nomli repo allaqachon bor. Boshqa nom yozing.";
       case UNSUPPORTED -> "⚠️ Bu xizmat hali qo'llab-quvvatlanmaydi.";
     };
@@ -214,6 +218,7 @@ final class ConnectionScreens {
           List.of(new Button("📂 Mavjud repo'ni tanlash" + suffix, Actions.REPO_PICK + view.id())));
       rows.add(List.of(new Button("➕ Yangi repo yaratish" + suffix, Actions.REPO_NEW + view.id())));
     }
+    rows.add(List.of(new Button("🔗 Havola bilan ulash", Actions.REPO_URL)));
     if (connections.isEmpty()) {
       rows.add(List.of(new Button("🔗 Ulanish qo'shish", Actions.CONNECTION_ADD)));
     }
@@ -221,6 +226,7 @@ final class ConnectionScreens {
     String body =
         connections.isEmpty()
             ? "Avval GitLab yoki GitHub tokenini qo'shing — keyin repo tanlaysiz yoki yaratasiz."
+                + " Yoki repo havolasini yuboring."
             : "Tasklar (Issue) va hujjatlar shu repo'da bo'ladi.";
     return new Screen("🔗 " + Html.bold(project.value()) + " — repo ulash\n\n" + body, rows);
   }
@@ -258,6 +264,41 @@ final class ConnectionScreens {
     }
     rows.add(List.of(new Button("⬅️ Orqaga", Actions.REPO_CHOOSE)));
     return new Screen("➕ <b>Yangi repo</b>\n\nQayerda yaratamiz?", rows);
+  }
+
+  static Screen askRepoUrl() {
+    return new Screen(
+        "🔗 Repo havolasini yuboring.\n<i>Masalan: https://github.com/egasi/nomi yoki"
+            + " https://git.example.uz/guruh/nomi</i>\n\nShu server uchun token bo'lsa — darhol"
+            + " ulanadi, yo'q bo'lsa token so'rayman.",
+        List.of(List.of(BotScreens.CANCEL)));
+  }
+
+  /** Havoladagi server uchun ulanish yo'q va qaysi xizmat ekanini bot bilmaydi. */
+  static Screen chooseServerProvider(ServerAddress address, List<Provider> providers) {
+    List<List<Button>> rows = new ArrayList<>();
+    for (Provider provider : providers) {
+      rows.add(
+          List.of(
+              new Button(
+                  icon(provider) + " " + provider.displayName(),
+                  Actions.repoUrlProvider(provider))));
+    }
+    rows.add(List.of(BotScreens.CANCEL));
+    return new Screen(
+        "🔗 "
+            + Html.bold(address.label())
+            + " uchun ulanish yo'q.\n\nBu server qaysi xizmat? Tanlang — token so'rayman, keyin"
+            + " repo ulanadi.",
+        rows);
+  }
+
+  /** Bulutdagi server ({@code github.com}) uchun token so'ralganda. */
+  static String noConnection(ServerAddress address) {
+    return "🔗 "
+        + Html.bold(address.label())
+        + " uchun ulanish yo'q — token qo'shamiz, keyin repo"
+        + " ulanadi.";
   }
 
   static Screen askRepoName(ProjectName project) {
