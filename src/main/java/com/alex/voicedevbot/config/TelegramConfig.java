@@ -3,12 +3,15 @@ package com.alex.voicedevbot.config;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation;
 import com.alex.voicedevbot.adapter.in.telegram.ConnectionsDialog;
 import com.alex.voicedevbot.adapter.in.telegram.DocsDialog;
+import com.alex.voicedevbot.adapter.in.telegram.ModelDialog;
 import com.alex.voicedevbot.adapter.in.telegram.TaskDialog;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.telegram.TelegramAudioSource;
 import com.alex.voicedevbot.application.port.in.BrowseDocsUseCase;
 import com.alex.voicedevbot.application.port.in.BrowseTranscriptsUseCase;
 import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
+import com.alex.voicedevbot.application.port.in.ChooseModelUseCase;
+import com.alex.voicedevbot.application.port.in.DraftTaskUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
 import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
@@ -59,6 +62,8 @@ class TelegramConfig {
       LinkRepoUseCase repos,
       ManageTasksUseCase tasks,
       BrowseDocsUseCase docs,
+      DraftTaskUseCase drafter,
+      ChooseModelUseCase models,
       ZoneId zoneId) {
     return new BotConversation(
         projects,
@@ -66,8 +71,9 @@ class TelegramConfig {
         language,
         transcripts,
         new ConnectionsDialog(gitLab, repos),
-        new TaskDialog(tasks, repos, transcripts),
+        new TaskDialog(tasks, repos, transcripts, drafter, glossary),
         new DocsDialog(docs),
+        new ModelDialog(models),
         zoneId);
   }
 

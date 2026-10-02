@@ -22,6 +22,7 @@ repositories {
 val telegramBotsVersion = "10.3.0"
 val archUnitVersion = "1.5.1"
 val wireMockVersion = "3.13.2"
+val anthropicVersion = "2.68.0"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -32,6 +33,7 @@ dependencies {
 	implementation("tools.jackson.core:jackson-databind")
 	implementation("org.telegram:telegrambots-longpolling:$telegramBotsVersion")
 	implementation("org.telegram:telegrambots-client:$telegramBotsVersion")
+	implementation("com.anthropic:anthropic-java:$anthropicVersion")
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")

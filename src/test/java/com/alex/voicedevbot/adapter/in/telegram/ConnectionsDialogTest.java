@@ -12,11 +12,15 @@ import static org.mockito.Mockito.when;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.adapter.out.claude.UnconfiguredClaude;
+import com.alex.voicedevbot.application.port.in.LanguageModelProblem;
+import com.alex.voicedevbot.application.port.in.TaskDraftResult;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
+import com.alex.voicedevbot.application.service.ChooseModelService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
@@ -25,6 +29,7 @@ import com.alex.voicedevbot.application.service.ManageTasksService;
 import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
@@ -91,8 +96,20 @@ class ConnectionsDialogTest {
             new ManageConnectionsService(
                 access, connections, GitLabFixtures.integrations(api), clock),
             repos),
-        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new TaskDialog(
+            new ManageTasksService(repoAccess),
+            repos,
+            transcripts,
+            (user, journalId) -> new TaskDraftResult.Failed(LanguageModelProblem.NOT_CONFIGURED),
+            new ManageGlossaryService(access, projects, settings)),
         new DocsDialog(new BrowseDocsService(repoAccess)),
+        new ModelDialog(
+            new ChooseModelService(
+                access,
+                settings,
+                settingsRepository,
+                new UnconfiguredClaude(),
+                new ModelId("claude-opus-5-5"))),
         ZoneOffset.UTC);
   }
 

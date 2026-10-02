@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.alex.voicedevbot.application.port.out.StorageException;
 import com.alex.voicedevbot.domain.Glossary;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SpeechLanguage;
@@ -113,6 +114,17 @@ class JdbcRepositoriesIntegrationTest {
     settings.save(UserSettings.defaults(USER, UZ));
 
     assertThat(settings.find(USER)).contains(UserSettings.defaults(USER, UZ));
+  }
+
+  @Test
+  void should_save_chosen_model_and_keep_it_when_language_changes() {
+    ModelId sonnet = new ModelId("claude-sonnet-5-5");
+    settings.save(UserSettings.defaults(USER, UZ).withModel(sonnet));
+
+    settings.save(settings.find(USER).orElseThrow().withLanguage(new SpeechLanguage("kk")));
+
+    assertThat(settings.find(USER))
+        .contains(UserSettings.defaults(USER, new SpeechLanguage("kk")).withModel(sonnet));
   }
 
   @Test

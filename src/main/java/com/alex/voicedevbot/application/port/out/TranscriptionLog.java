@@ -1,5 +1,6 @@
 package com.alex.voicedevbot.application.port.out;
 
+import com.alex.voicedevbot.domain.LlmUsage;
 import com.alex.voicedevbot.domain.LoggedTranscript;
 import com.alex.voicedevbot.domain.TranscriptFilter;
 import com.alex.voicedevbot.domain.TranscriptRecord;
@@ -21,4 +22,7 @@ public interface TranscriptionLog {
   List<LoggedTranscript> list(TranscriptFilter filter, int offset, int limit);
 
   Optional<LoggedTranscript> find(long id);
+
+  /** Transkriptdan task tuzgan Claude chaqiruvi narxi; har chaqiruvda ustiga yoziladi. */
+  void recordLlmUsage(long id, LlmUsage usage);
 }
