@@ -1,6 +1,6 @@
 # voice-dev-bot
 
-Telegram voice bot: ovozli buyruq → matn → task (GitHub Issue / Jira) → kod yozish → test → deploy.
+Telegram voice bot: ovozli buyruq → matn → task (GitLab Issue + spetsifikatsiya) → kod yozish → test → deploy.
 Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o'z repo'sida saqlaydi.
 
 ## Stack
@@ -10,6 +10,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 
 ## Qoidalar (kod yozishdan oldin o'qing)
 - [docs/agent-workflow.md](docs/agent-workflow.md) — **agent shu tartibda ishlaydi**: scope, qachon so'rash, git, hisobot.
+- [docs/roadmap.md](docs/roadmap.md) — **kelishilgan qarorlar va keyingi PR'lar (B, C, D) rejasi**. Yangi task'ni shu yerdan boshlang.
 - [docs/architecture.md](docs/architecture.md) — qatlamlar, bog'liqlik yo'nalishi, yangi integratsiya qo'shish.
 - [docs/coding-principles.md](docs/coding-principles.md) — SOLID, clean code, Java/Spring qoidalari.
 - [docs/testing.md](docs/testing.md) — test turlari, nomlash, coverage, QA.
@@ -24,15 +25,16 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 ## Oqim
 1. Telegram bot voice xabarni qabul qiladi (faqat whitelist'dagi Telegram ID).
 2. STT: `transcribe(audio) -> text` interface orqasida (whisper.cpp server, `language="uz"`). Dvigatel almashtirilishi oson bo'lsin (lokal Whisper yoki tashqi API).
-3. LLM (Claude API) matnni JSON'ga aylantiradi: `{project, title, description, acceptance_criteria, type}`; Whisper xatolarini ham tuzatadi.
+3. LLM (Claude API, standart `claude-opus-5-5`, foydalanuvchi `/model` bilan tanlaydi) matnni structured output JSON'ga aylantiradi: `{project, title, description, acceptance_criteria, type, corrections, task_summary}`; Whisper xatolarini ham tuzatadi.
 4. Bot natijani ko'rsatadi, inline tugma bilan tasdiqlanadi (✅ / ✏️). Tasdiqsiz hech narsa yaratilmaydi.
-5. Tasdiqlansa GitHub Issue (yoki Jira) yaratiladi, `ai-task` label bilan.
-6. Label bo'yicha agent (Claude Code headless / GitHub Actions) kodni alohida branch'ga yozadi va PR ochadi.
+5. Tasdiqlansa project repo'sida spetsifikatsiya (`docs/specs/`) va **GitLab Issue** yaratiladi, `ai-task` label bilan.
+6. Label bo'yicha agent (Claude Code headless / GitLab CI) kodni alohida branch'ga yozadi va Merge Request ochadi.
 7. CI testlar, staging'ga avtomatik deploy.
-8. **Prod'ga faqat qo'lda tasdiq bilan** (GitHub Environments → required reviewers).
+8. **Prod'ga faqat qo'lda tasdiq bilan** (GitLab protected environments).
 
 ## Multi-project dizayn
-- Projectlar bot bazasida (PostgreSQL): `/addproject`, `/project`. Keyin `{repo, tracker (github|jira), stack}` ham shu yerga qo'shiladi.
+- Projectlar bot bazasida (PostgreSQL): `/addproject`, `/project`. Har project bitta **GitLab repo**'ga bog'lanadi (mavjudini tanlash yoki yangisini yaratish).
+- GitLab ulanishlari bot ichida boshqariladi: gitlab.com, self-hosted yoki boshqa istalgan GitLab — `{base_url, token}`; token tekshiriladi, tugash sanasi kuzatiladi va yangilanadi (roadmap → PR C).
 - Har projectning **atamalar lug'ati** bazada (`/glossary`), `.env`da emas. Faol project lug'ati Whisper prompt'iga qo'shiladi; `TaskParser` esa barcha projectlar lug'atini ko'radi va projectni o'zi aniqlaydi.
 - `/project` buyrug'i yoki ovozda project nomi aytilsa LLM ajratadi; topolmasa so'raydi.
 - Har foydalanuvchining nutq tili (`/lang`): Whisper'da qoraqalpoq tili yo'q, bunday foydalanuvchilar uchun `kk` eng yaqini.
@@ -54,7 +56,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 - CI uchun til bo'yicha reusable workflow shablonlari (java, node, flutter) markaziy repo'da.
 
 ## Infratuzilma qarorlari
-- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda lotin yozuvidagi namuna prompt (usiz matn kirill/turkcha imloga o'tib ketadi). Project atamalari lug'ati `.env`da emas — har project uchun bazada (keyingi task). Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
+- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda lotin yozuvidagi namuna prompt (usiz matn kirill/turkcha imloga o'tib ketadi). Project atamalari lug'ati `.env`da emas — har project uchun bazada (`/glossary`), faol project lug'ati prompt'ga qo'shiladi. Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
 - Server: uy kompyuterida (Windows, RTX 3060 8 GB) Docker'da — `docker compose --profile gpu up -d` (`compose.yaml`, rasmiy `whisper.cpp:main-cuda` image). Model bir marta yuklanadi.
 - Dev (Mac): native `whisper-server` (Metal GPU, Docker'dan ~70x tez) — `scripts/whisper-dev.sh`. Rasmiy image arm64 uchun yo'q.
 - Dev va server farqi faqat bitta sozlama: `STT_WHISPER_URL`.
@@ -64,21 +66,21 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 
 ## Xavfsizlik
 - Faqat whitelist Telegram ID'dan buyruq qabul qilinadi.
-- Kalitlar (Telegram, Claude, GitHub, Jira) faqat `.env`da, repo'ga commit qilinmaydi (`.gitignore`).
+- Kalitlar (Telegram, Claude, shifrlash kaliti) faqat `.env`da, repo'ga commit qilinmaydi (`.gitignore`).
+- GitLab tokenlari bazada **shifrlangan** (AES-GCM, kalit `.env`da); logga va javobga tushmaydi, botda niqoblangan; token yozilgan xabar chatdan o'chiriladi.
 - Agent `main`'ga to'g'ridan-to'g'ri push qila olmasin (branch protection), faqat feature branch + PR.
 
-## Ochiq savollar
-- Tracker: avval GitHub Issues, Jira keyinroq?
-
 ## Bosqichlar
-1. Voice → matn → GitHub Issue (project tanlash va tasdiqlash bilan)
-2. Issue → Claude Code → PR
+1. Voice → matn → GitLab Issue + spetsifikatsiya (project tanlash va tasdiqlash bilan) — batafsil: [docs/roadmap.md](docs/roadmap.md)
+2. Issue → Claude Code → Merge Request
 3. CI + staging deploy
 4. Prod'ga qo'lda tasdiq bilan chiqarish
 
 ## Holat
 - 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT — `WhisperCppSpeechToText` (whisper.cpp server); `STT_ENGINE=stub` bilan Whisper'siz ishlatish mumkin. Voice, audio fayl, video, video xabar qabul qilinadi (20 MB gacha).
 - Projectlar, lug'at va foydalanuvchi tili — PostgreSQL (`compose.yaml`, port 5433), Flyway, oddiy JDBC (Spring faqat `config`da). Boshqaruv inline tugmalar bilan (`BotConversation` + `BotScreens`), buyruqlar qisqa yo'l sifatida: `/start`, `/project`, `/addproject`, `/glossary`, `/lang`, `/help`.
-- Keyingi: transkripsiya jurnali (audio diskda + xom matn; keyin Claude tuzatgan va tasdiqlangan matn — lug'at takliflari, sozlamalarni o'lchash va Whisper fine-tuning dataset uchun) → `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
+- Tayyor: PR #1–#3 (STT, audio turlari, projectlar/lug'at/til, tugmali interfeys).
+- **Keyingi: PR B** — transkripsiya jurnali + project kartochkasi + ⚙️ Sozlamalar; keyin PR C (GitLab ulanishlari), PR D (Claude TaskParser). Reja: [docs/roadmap.md](docs/roadmap.md).
 - Ma'lum muammo: TelegramBots 10.3 `downloadFileAsStream` API manzilini e'tiborsiz qoldiradi va HTTP statusni tekshirmaydi — shuning uchun `TelegramAudioSource` faylni `java.net.http.HttpClient` bilan o'zi yuklaydi.
-- Claude GitHub App'iga bu private repo uchun yozish ruxsati berilmagan (push rad etilgan); kod IntelliJ/VS Code'da lokal yoziladi va o'zingiz push qilasiz yoki ruxsat berasiz.
+- Bot repo'si GitHub'da (`Alex3195/voice-dev-bot`): agent lokal yozadi, feature branch'ga push qiladi va `gh` bilan PR ochadi; `main`ga merge — faqat inson (`.claude/hooks/block-main.sh`).
+- Dev'da ishga tushirish: `docker compose up -d postgres`, `scripts/whisper-dev.sh`, `./gradlew bootRun`. Testlar Docker talab qiladi (Testcontainers).
