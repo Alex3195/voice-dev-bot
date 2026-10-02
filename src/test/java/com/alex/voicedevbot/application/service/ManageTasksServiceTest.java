@@ -92,8 +92,7 @@ class ManageTasksServiceTest {
   }
 
   private void issues(Task... tasks) {
-    when(api.issues(connection, REPO.id(), ManageTasksService.ISSUE_LIMIT))
-        .thenReturn(List.of(tasks));
+    when(api.issues(connection, REPO, ManageTasksService.ISSUE_LIMIT)).thenReturn(List.of(tasks));
   }
 
   @Test
@@ -181,8 +180,8 @@ class ManageTasksServiceTest {
     MergeRequest mr =
         new MergeRequest(
             3, "Login fix", MergeRequest.State.MERGED, URI.create("https://gitlab.com/mr/3"));
-    when(api.issue(connection, REPO.id(), 7)).thenReturn(task);
-    when(api.mergeRequests(connection, REPO.id(), 7)).thenReturn(List.of(mr));
+    when(api.issue(connection, REPO, 7)).thenReturn(task);
+    when(api.mergeRequests(connection, REPO, 7)).thenReturn(List.of(mr));
 
     assertThat(service.open(USER, 7))
         .isEqualTo(new TasksResult.Opened(ELT_IMZO, task, TaskStatus.IN_REVIEW, List.of(mr)));
@@ -192,7 +191,7 @@ class ManageTasksServiceTest {
   void should_create_issue_with_ai_task_label() {
     NewTask draft = new NewTask("Login", "Parolni tiklash");
     Task created = task(8, true, null, 0);
-    when(api.createIssue(connection, REPO.id(), draft, List.of(ManageTasksUseCase.AI_TASK_LABEL)))
+    when(api.createIssue(connection, REPO, draft, List.of(ManageTasksUseCase.AI_TASK_LABEL)))
         .thenReturn(created);
 
     assertThat(service.create(USER, draft)).isEqualTo(new TasksResult.Created(ELT_IMZO, created));
@@ -202,8 +201,8 @@ class ManageTasksServiceTest {
   void should_close_and_reopen_task() {
     Task closed = task(7, false, null, 0);
     Task reopened = task(7, true, null, 0);
-    when(api.setIssueOpen(connection, REPO.id(), 7, false)).thenReturn(closed);
-    when(api.setIssueOpen(connection, REPO.id(), 7, true)).thenReturn(reopened);
+    when(api.setIssueOpen(connection, REPO, 7, false)).thenReturn(closed);
+    when(api.setIssueOpen(connection, REPO, 7, true)).thenReturn(reopened);
 
     assertThat(service.setOpen(USER, 7, false))
         .isEqualTo(new TasksResult.Opened(ELT_IMZO, closed, TaskStatus.CLOSED, List.of()));
@@ -240,7 +239,7 @@ class ManageTasksServiceTest {
 
   @Test
   void should_ask_for_new_token_when_gitlab_rejects_it() {
-    when(api.issues(any(), anyLong(), anyInt()))
+    when(api.issues(any(), any(), anyInt()))
         .thenThrow(new IntegrationException(Reason.UNAUTHORIZED, "GET issues returned 401", null));
 
     assertThat(service.overview(USER)).isInstanceOf(RepoUnavailable.NeedsNewToken.class);
@@ -248,7 +247,7 @@ class ManageTasksServiceTest {
 
   @Test
   void should_report_gitlab_failure() {
-    when(api.issue(any(), anyLong(), anyLong()))
+    when(api.issue(any(), any(), anyLong()))
         .thenThrow(new IntegrationException(Reason.NOT_FOUND, "GET issue returned 404", null));
 
     assertThat(service.open(USER, 99))
@@ -269,6 +268,6 @@ class ManageTasksServiceTest {
 
     service.overview(USER);
 
-    verify(api).issues(connection, REPO.id(), ManageTasksService.ISSUE_LIMIT);
+    verify(api).issues(connection, REPO, ManageTasksService.ISSUE_LIMIT);
   }
 }

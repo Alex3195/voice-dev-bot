@@ -168,8 +168,8 @@ final class ConnectionScreens {
               + " <code>github_pat_</code> yoki <code>ghp_</code> bilan boshlanadi.";
       case TOKEN_REJECTED -> "⚠️ Token qabul qilinmadi: noto'g'ri, bekor qilingan yoki tugagan.";
       case MISSING_SCOPE ->
-          "⚠️ Token'da kerakli ruxsat yo'q (GitLab: <code>api</code>). Yangi token yarating va"
-              + " ruxsatni belgilang.";
+          "⚠️ Token'da kerakli ruxsat yo'q (GitLab: <code>api</code>, GitHub classic:"
+              + " <code>repo</code>). Yangi token yarating va ruxsatni belgilang.";
       case TOKEN_EXPIRED -> "⚠️ Bu tokenning muddati tugagan.";
       case OTHER_OWNER ->
           "⚠️ Bu token boshqa foydalanuvchiniki. Uni ➕ yangi ulanish sifatida qo'shing.";
@@ -220,7 +220,7 @@ final class ConnectionScreens {
     rows.add(List.of(new Button("⏭ Keyinroq", Actions.selectProject(project.key()))));
     String body =
         connections.isEmpty()
-            ? "Avval xizmat (GitLab) tokenini qo'shing — keyin repo tanlaysiz yoki yaratasiz."
+            ? "Avval GitLab yoki GitHub tokenini qo'shing — keyin repo tanlaysiz yoki yaratasiz."
             : "Tasklar (Issue) va hujjatlar shu repo'da bo'ladi.";
     return new Screen("🔗 " + Html.bold(project.value()) + " — repo ulash\n\n" + body, rows);
   }
@@ -378,9 +378,14 @@ final class ConnectionScreens {
                 + "2. Muddatini tanlang → <b>Create</b>\n";
           }
           case GITHUB ->
-              "1. <a href=\"https://github.com/settings/personal-access-tokens/new\">Token yaratish"
-                  + " sahifasi</a>\n"
-                  + "2. Muddat va repo'larni tanlang → <b>Generate token</b>\n";
+              "1. <a href=\"https://github.com/settings/personal-access-tokens/new\">Fine-grained"
+                  + " token yaratish</a>: muddat, <b>Repository access → All repositories</b>\n"
+                  + "2. <b>Permissions</b>: Contents, Issues, Pull requests — <i>Read and write</i>;"
+                  + " Administration — <i>Read and write</i> (yangi repo yaratish uchun) →"
+                  + " <b>Generate token</b>\n"
+                  + "<i>Yoki <a href=\"https://github.com/settings/tokens/new?scopes=repo&amp;"
+                  + "description=voice-dev-bot\">classic token</a> — <code>repo</code> ruxsati"
+                  + " bilan.</i>\n";
         };
     return steps
         + "3. Tokenni nusxalab shu yerga yuboring\n\n"

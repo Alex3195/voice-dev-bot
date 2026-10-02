@@ -123,7 +123,7 @@ final class TaskScreens {
       html.append("\n\n").append(Html.escape(preview(task.description())));
     }
     if (!opened.mergeRequests().isEmpty()) {
-      html.append("\n\n<b>Merge request'lar</b>");
+      html.append("\n\n<b>Merge / Pull request'lar</b>");
       opened.mergeRequests().forEach(mr -> html.append("\n").append(mergeRequest(mr)));
     }
     Button toggle =
@@ -242,7 +242,7 @@ final class TaskScreens {
           case MERGED -> "✅ merge bo'lgan";
           case CLOSED -> "⚪ yopilgan";
         };
-    return state + " · " + link(mr.webUrl(), "!" + mr.iid() + " " + mr.title());
+    return state + " · " + link(mr.webUrl(), mr.title());
   }
 
   private static String repoLink(Repo repo) {

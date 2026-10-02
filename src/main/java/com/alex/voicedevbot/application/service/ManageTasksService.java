@@ -63,7 +63,7 @@ public class ManageTasksService implements ManageTasksUseCase {
   @Override
   public TasksResult open(TelegramUserId user, long iid) {
     return run(
-        user, repo -> opened(repo, repo.tracker().issue(repo.connection(), repo.repoId(), iid)));
+        user, repo -> opened(repo, repo.tracker().issue(repo.connection(), repo.repo(), iid)));
   }
 
   @Override
@@ -75,7 +75,7 @@ public class ManageTasksService implements ManageTasksUseCase {
             new TasksResult.Created(
                 repo.project(),
                 repo.tracker()
-                    .createIssue(repo.connection(), repo.repoId(), task, List.of(AI_TASK_LABEL))));
+                    .createIssue(repo.connection(), repo.repo(), task, List.of(AI_TASK_LABEL))));
   }
 
   @Override
@@ -83,7 +83,7 @@ public class ManageTasksService implements ManageTasksUseCase {
     return run(
         user,
         repo ->
-            opened(repo, repo.tracker().setIssueOpen(repo.connection(), repo.repoId(), iid, open)));
+            opened(repo, repo.tracker().setIssueOpen(repo.connection(), repo.repo(), iid, open)));
   }
 
   private TasksResult opened(ProjectRepoAccess.Ready repo, Task task) {
@@ -91,11 +91,11 @@ public class ManageTasksService implements ManageTasksUseCase {
         repo.project(),
         task,
         task.status(repo.today()),
-        repo.code().mergeRequests(repo.connection(), repo.repoId(), task.iid()));
+        repo.code().mergeRequests(repo.connection(), repo.repo(), task.iid()));
   }
 
   private List<Task> issues(ProjectRepoAccess.Ready repo) {
-    return repo.tracker().issues(repo.connection(), repo.repoId(), ISSUE_LIMIT);
+    return repo.tracker().issues(repo.connection(), repo.repo(), ISSUE_LIMIT);
   }
 
   /** Muddati o'tganlar — eng eskisi birinchi; qolganlari xizmat tartibida (eng yangisi). */

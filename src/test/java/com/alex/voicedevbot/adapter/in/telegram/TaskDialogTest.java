@@ -5,7 +5,6 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -137,8 +136,7 @@ class TaskDialogTest {
   }
 
   private void issues(Task... tasks) {
-    when(api.issues(connection, REPO.id(), ManageTasksService.ISSUE_LIMIT))
-        .thenReturn(List.of(tasks));
+    when(api.issues(connection, REPO, ManageTasksService.ISSUE_LIMIT)).thenReturn(List.of(tasks));
   }
 
   private Screen text(String text) {
@@ -198,8 +196,8 @@ class TaskDialogTest {
   void should_list_group_and_open_task_with_merge_requests() {
     Task task = task(3, "Login sahifasi", true, null, 1);
     issues(task, task(2, "B", true, null, 0));
-    when(api.issue(connection, REPO.id(), 3)).thenReturn(task);
-    when(api.mergeRequests(connection, REPO.id(), 3))
+    when(api.issue(connection, REPO, 3)).thenReturn(task);
+    when(api.mergeRequests(connection, REPO, 3))
         .thenReturn(
             List.of(
                 new MergeRequest(
@@ -213,7 +211,7 @@ class TaskDialogTest {
     assertThat(opened.html())
         .startsWith("🔀 <b>#3 Login sahifasi</b>\n🔀 MR ochilgan\n")
         .contains("Tavsif &lt;b&gt;")
-        .contains("🔀 ochiq · <a href=\"https://mr/5\">!5 Fix login</a>");
+        .contains("🔀 ochiq · <a href=\"https://mr/5\">Fix login</a>");
     assertThat(labels(opened)).containsExactly("✔️ Yopish", "⬅️ 🔀 MR ochilgan", "✅ Tasklar");
   }
 
@@ -236,11 +234,9 @@ class TaskDialogTest {
 
   @Test
   void should_close_and_reopen_task() {
-    when(api.setIssueOpen(connection, REPO.id(), 3, false))
-        .thenReturn(task(3, "Login", false, null, 0));
-    when(api.setIssueOpen(connection, REPO.id(), 3, true))
-        .thenReturn(task(3, "Login", true, null, 0));
-    when(api.mergeRequests(connection, REPO.id(), 3)).thenReturn(List.of());
+    when(api.setIssueOpen(connection, REPO, 3, false)).thenReturn(task(3, "Login", false, null, 0));
+    when(api.setIssueOpen(connection, REPO, 3, true)).thenReturn(task(3, "Login", true, null, 0));
+    when(api.mergeRequests(connection, REPO, 3)).thenReturn(List.of());
 
     Screen closed = press(Actions.TASK_CLOSE + 3).screen();
     Screen reopened = press(Actions.TASK_REOPEN + 3).screen();
@@ -254,12 +250,12 @@ class TaskDialogTest {
   void should_create_task_from_title_and_description_only_after_confirmation() {
     Task created = task(12, "Login", true, null, 0);
     NewTask draft = new NewTask("Login", "Parolni tiklash");
-    when(api.createIssue(connection, REPO.id(), draft, LABELS)).thenReturn(created);
+    when(api.createIssue(connection, REPO, draft, LABELS)).thenReturn(created);
 
     Screen askTitle = press(Actions.TASK_NEW).screen();
     Screen askDescription = text("Login");
     Screen confirm = text("Parolni tiklash");
-    verify(api, never()).createIssue(any(), anyLong(), any(), any());
+    verify(api, never()).createIssue(any(), any(), any(), any());
     Screen done = press(Actions.TASK_CONFIRM).screen();
 
     assertThat(askTitle.html()).startsWith("✍️ <b>ELT imzo</b> uchun yangi task sarlavhasini");
@@ -276,7 +272,7 @@ class TaskDialogTest {
 
   @Test
   void should_create_task_without_description() {
-    when(api.createIssue(connection, REPO.id(), new NewTask("Login", ""), LABELS))
+    when(api.createIssue(connection, REPO, new NewTask("Login", ""), LABELS))
         .thenReturn(task(1, "Login", true, null, 0));
     press(Actions.TASK_NEW);
     text("Login");
@@ -285,7 +281,7 @@ class TaskDialogTest {
     press(Actions.TASK_CONFIRM);
 
     assertThat(confirm.html()).contains("<i>tavsifsiz</i>");
-    verify(api).createIssue(connection, REPO.id(), new NewTask("Login", ""), LABELS);
+    verify(api).createIssue(connection, REPO, new NewTask("Login", ""), LABELS);
   }
 
   @Test
@@ -313,7 +309,7 @@ class TaskDialogTest {
         conversation.transcript(
             USER, "Login sahifasini tuzat. Parol tiklansin", OptionalLong.of(id));
     NewTask edited = new NewTask("Login tuzatish", "Login sahifasini tuzat. Parol tiklansin");
-    when(api.createIssue(connection, REPO.id(), edited, LABELS))
+    when(api.createIssue(connection, REPO, edited, LABELS))
         .thenReturn(task(4, "Login tuzatish", true, null, 0));
 
     Reply draft = press(actions(transcript).getFirst());
@@ -327,7 +323,7 @@ class TaskDialogTest {
         .contains("<b>Login sahifasini tuzat</b>\n\nLogin sahifasini tuzat. Parol tiklansin");
     assertThat(askEdit.html()).contains("Hozirgi:\n<code>Login sahifasini tuzat</code>");
     assertThat(confirm.html()).contains("<b>Login tuzatish</b>");
-    verify(api).createIssue(connection, REPO.id(), edited, LABELS);
+    verify(api).createIssue(connection, REPO, edited, LABELS);
   }
 
   @Test
@@ -355,7 +351,7 @@ class TaskDialogTest {
 
     assertThat(discarded.html()).isEqualTo("✖️ Task yaratilmadi.");
     assertThat(press(Actions.TASK_CONFIRM).screen().html()).startsWith("ℹ️ Qoralama topilmadi");
-    verify(api, never()).createIssue(any(), anyLong(), any(), any());
+    verify(api, never()).createIssue(any(), any(), any(), any());
   }
 
   @Test

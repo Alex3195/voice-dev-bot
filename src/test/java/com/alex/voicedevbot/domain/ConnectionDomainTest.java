@@ -24,6 +24,9 @@ class ConnectionDomainTest {
     assertThat(token.masked()).isEqualTo("glpat-…a1b2");
     assertThat(token.toString()).isEqualTo("AccessToken[glpat-…a1b2]").doesNotContain("AbCd");
     assertThat(new AccessToken("abcdefgh1234").masked()).isEqualTo("…1234");
+    assertThat(new AccessToken("github_pat_11ABCDEFG0abcd").masked()).isEqualTo("github_pat_…abcd");
+    assertThat(new AccessToken("ghp_abcdefgh1234").masked()).isEqualTo("ghp_…1234");
+    assertThat(new AccessToken("secret_partOfToken9").masked()).isEqualTo("…ken9");
   }
 
   @ParameterizedTest

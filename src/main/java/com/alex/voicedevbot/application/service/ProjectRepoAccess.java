@@ -35,12 +35,7 @@ public class ProjectRepoAccess {
       Repo repo,
       LocalDate today,
       CodeHost code,
-      IssueTracker tracker) {
-
-    long repoId() {
-      return repo.id();
-    }
-  }
+      IssueTracker tracker) {}
 
   private final AccessPolicy accessPolicy;
   private final UserSettingsLookup settings;

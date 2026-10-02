@@ -13,6 +13,11 @@ public class IntegrationException extends RuntimeException {
     NOT_FOUND,
     /** Masalan, shu nomli repo allaqachon bor. */
     CONFLICT,
+    /**
+     * Token tekshiruvida: tokenda xizmat talab qiladigan ruxsat yo'q (masalan, GitHub {@code
+     * repo}).
+     */
+    MISSING_SCOPE,
     /** Server javob bermadi yoki 5xx. */
     UNAVAILABLE
   }
