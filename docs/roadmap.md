@@ -136,7 +136,8 @@ qoralamasi, D2 — `docs/specs/` ga MR/PR orqali spetsifikatsiya, D3 — project
 - [x] Har chaqiruvning `usage`i (model, input, cache read/write, output) — `transcription.llm_usage` (jsonb).
 - [ ] Haqiqiy so'rovlarda tekshirish: kesh urilishi (`cache_read_input_tokens`), `low` effort sifati, TTL tanlash
       (Opus 5.5'da minimum 512 token; o'qish $0.20/MTok, yozish 1.25× (5 daqiqa) / 2× (1 soat)).
-- [ ] Claude javobini kutayotganda "⏳" xabari (hozir tugma bosilgach bir necha soniya jimlik).
+- [x] Claude ishlayotganda bosilgan tugma "⏳ Claude qoralama tuzmoqda…" ga almashadi va bosilmaydi; qayta bosish
+      ikkinchi so'rov yubormaydi (shu transkriptdan tuzilgan qoralama qayta ko'rsatiladi). Kredit tugasa — "💳".
 
 ### D2 — Spetsifikatsiya (keyingi)
 
