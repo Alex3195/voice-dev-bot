@@ -103,6 +103,11 @@ public class GitLabHttpApi implements CodeHost, IssueTracker {
   }
 
   @Override
+  public Repo findRepo(ProviderConnection connection, String path) {
+    return repoOf(get(connection, "/projects/" + encodeSegment(path)));
+  }
+
+  @Override
   public List<Namespace> namespaces(ProviderConnection connection) {
     JsonNode namespaces = get(connection, "/namespaces?per_page=50");
     List<Namespace> result = new ArrayList<>();

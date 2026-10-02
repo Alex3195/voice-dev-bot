@@ -14,6 +14,10 @@ public enum ConnectionProblem {
   FORBIDDEN,
   NOT_FOUND,
   INVALID_REPO_NAME,
+  /** Repo havolasi tushunarsiz: server va {@code egasi/nomi} ajratib bo'lmadi. */
+  INVALID_REPO_URL,
+  /** Havoladagi repo hech bir token bilan topilmadi (yo'q yoki ruxsat yo'q). */
+  REPO_NOT_FOUND,
   REPO_EXISTS,
   /** Bu xizmat uchun bot adapteri hali yo'q. */
   UNSUPPORTED

@@ -5,6 +5,7 @@ import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ProjectCommandResult.ProjectSummary;
 import com.alex.voicedevbot.application.port.in.TranscriptsResult;
 import com.alex.voicedevbot.domain.LoggedTranscript;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TranscriptRecord;
@@ -62,11 +63,17 @@ final class BotScreens {
                 new Button("❓ Yordam", Actions.HELP))));
   }
 
-  static Screen settings(SpeechLanguage language) {
+  /**
+   * @param model foydalanuvchining Claude modeli
+   */
+  static Screen settings(SpeechLanguage language, Optional<ModelId> model) {
     return new Screen(
-        "⚙️ <b>Sozlamalar</b>\n\n🌐 Nutq tili: " + languageLabel(language),
+        "⚙️ <b>Sozlamalar</b>\n\n🌐 Nutq tili: "
+            + languageLabel(language)
+            + model.map(found -> "\n🤖 Claude modeli: " + Html.code(found.value())).orElse(""),
         List.of(
             List.of(new Button("🌐 Nutq tili", Actions.LANGUAGES)),
+            List.of(new Button("🤖 Claude modeli", Actions.MODELS)),
             List.of(new Button("🔗 Ulanishlar", Actions.CONNECTIONS)),
             List.of(new Button("📝 Projectsiz transkriptlar", Actions.transcripts(null, 0))),
             List.of(BACK_HOME)));
@@ -248,7 +255,8 @@ final class BotScreens {
         /start — bosh menyu
         /project &lt;nom&gt; — projectni tanlash
         /glossary add &lt;atama&gt;, &lt;atama&gt; — atama qo'shish
-        /lang &lt;kod&gt; — til (uz, kk, ru...)""",
+        /lang &lt;kod&gt; — til (uz, kk, ru...)
+        /model — Claude modeli (transkriptdan task tuzadi)""",
         List.of(List.of(BACK_HOME)));
   }
 

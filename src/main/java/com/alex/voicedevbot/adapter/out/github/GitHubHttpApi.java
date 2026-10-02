@@ -139,6 +139,11 @@ public class GitHubHttpApi implements CodeHost, IssueTracker {
   }
 
   @Override
+  public Repo findRepo(ProviderConnection connection, String path) {
+    return repoOf(get(connection, "/repos/" + encodePath(path)));
+  }
+
+  @Override
   public List<Namespace> namespaces(ProviderConnection connection) {
     JsonNode user = get(connection, "/user");
     List<Namespace> result = new ArrayList<>();

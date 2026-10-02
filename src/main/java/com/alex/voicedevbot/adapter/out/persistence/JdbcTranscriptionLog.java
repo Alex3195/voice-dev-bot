@@ -3,6 +3,7 @@ package com.alex.voicedevbot.adapter.out.persistence;
 import com.alex.voicedevbot.application.port.out.TranscriptionLog;
 import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
+import com.alex.voicedevbot.domain.LlmUsage;
 import com.alex.voicedevbot.domain.LoggedTranscript;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SourceAudio;
@@ -40,6 +41,14 @@ public class JdbcTranscriptionLog implements TranscriptionLog {
       from transcription t
       left join project p on p.id = t.project_id
       """;
+  private static final String UPDATE_USAGE =
+      """
+      update transcription
+      set llm_usage = jsonb_build_object('model', ?::text, 'input_tokens', ?::bigint,
+          'cache_read_input_tokens', ?::bigint, 'cache_creation_input_tokens', ?::bigint,
+          'output_tokens', ?::bigint)
+      where id = ?
+      """;
   private static final String NEWEST_FIRST = " order by t.created_at desc, t.id desc";
 
   private final Jdbc jdbc;
@@ -59,6 +68,23 @@ public class JdbcTranscriptionLog implements TranscriptionLog {
               rows.next();
               return rows.getLong("id");
             }
+          }
+        });
+  }
+
+  @Override
+  public void recordLlmUsage(long id, LlmUsage usage) {
+    jdbc.query(
+        "record llm usage",
+        connection -> {
+          try (PreparedStatement update = connection.prepareStatement(UPDATE_USAGE)) {
+            update.setString(1, usage.model().value());
+            update.setLong(2, usage.inputTokens());
+            update.setLong(3, usage.cacheReadTokens());
+            update.setLong(4, usage.cacheWriteTokens());
+            update.setLong(5, usage.outputTokens());
+            update.setLong(6, id);
+            return update.executeUpdate();
           }
         });
   }

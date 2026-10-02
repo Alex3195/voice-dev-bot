@@ -5,6 +5,8 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,10 +14,15 @@ import static org.mockito.Mockito.when;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.adapter.out.claude.UnconfiguredClaude;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
+import com.alex.voicedevbot.application.port.out.LanguageModelException;
+import com.alex.voicedevbot.application.port.out.TaskParser;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
+import com.alex.voicedevbot.application.service.ChooseModelService;
+import com.alex.voicedevbot.application.service.DraftTaskService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
@@ -26,7 +33,9 @@ import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
+import com.alex.voicedevbot.domain.LlmUsage;
 import com.alex.voicedevbot.domain.MergeRequest;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
@@ -37,8 +46,11 @@ import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SourceAudio;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.Task;
+import com.alex.voicedevbot.domain.TaskDraft;
 import com.alex.voicedevbot.domain.TaskStatus;
+import com.alex.voicedevbot.domain.TaskType;
 import com.alex.voicedevbot.domain.TelegramUserId;
+import com.alex.voicedevbot.domain.TermCorrection;
 import com.alex.voicedevbot.domain.Transcript;
 import com.alex.voicedevbot.domain.TranscriptRecord;
 import com.alex.voicedevbot.domain.Transcription;
@@ -80,6 +92,16 @@ class TaskDialogTest {
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
   private final InMemoryTranscriptionLog transcriptLog = new InMemoryTranscriptionLog();
   private final CodeHostAndTracker api = mock(CodeHostAndTracker.class);
+
+  /** Standart holatda Claude ulanmagan — oddiy qoralama; Claude testlari javobni o'zi beradi. */
+  private final TaskParser parser =
+      mock(
+          TaskParser.class,
+          invocation -> {
+            throw new LanguageModelException(
+                LanguageModelException.Reason.NOT_CONFIGURED, "no key", null);
+          });
+
   private final BotConversation conversation = conversation();
   private ProviderConnection connection;
 
@@ -110,8 +132,27 @@ class TaskDialogTest {
             new ManageConnectionsService(
                 access, connections, GitLabFixtures.integrations(api), clock),
             repos),
-        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new TaskDialog(
+            new ManageTasksService(repoAccess),
+            repos,
+            transcripts,
+            new DraftTaskService(
+                access,
+                settings,
+                projects,
+                transcriptLog,
+                repoAccess,
+                parser,
+                new ModelId("claude-opus-5-5")),
+            new ManageGlossaryService(access, projects, settings)),
         new DocsDialog(new BrowseDocsService(repoAccess)),
+        new ModelDialog(
+            new ChooseModelService(
+                access,
+                settings,
+                settingsRepository,
+                new UnconfiguredClaude(),
+                new ModelId("claude-opus-5-5"))),
         ZoneOffset.UTC);
   }
 
@@ -367,6 +408,107 @@ class TaskDialogTest {
     assertThat(conversation.onButton(USER, Actions.TASK_GROUP + "NOPE:0")).isEmpty();
     assertThat(conversation.onButton(USER, Actions.TASK_OPEN + "abc")).isEmpty();
     assertThat(conversation.onButton(USER, Actions.TASK_PREFIX + "unknown")).isEmpty();
+  }
+
+  private long loggedTranscript(String text) {
+    return transcriptLog.append(
+        TranscriptRecord.of(
+            UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO),
+            new Transcription(new Transcript(text), "", "whisper"),
+            new SourceAudio(new AudioRef("f", "audio/ogg"), AudioKind.VOICE, Duration.ZERO),
+            Instant.parse("2026-10-02T09:00:00Z")));
+  }
+
+  @Test
+  void should_draft_task_with_claude_show_notes_and_add_suggested_term() {
+    // given
+    projects.save(Project.named(new ProjectName("Finbank")));
+    TaskDraft claudeDraft =
+        new TaskDraft(
+            "Sertifikat muddatini ko'rsatish",
+            "Imzolash sahifasida muddat ko'rinsin.",
+            List.of("Muddat sanasi ko'rinadi"),
+            TaskType.FEATURE,
+            List.of(
+                new TermCorrection("elt imza", "ELT imzo"), new TermCorrection("klayes", "Klaes")),
+            "Muddat ko'rsatiladi.");
+    doReturn(
+            new TaskParser.ParsedTask(
+                claudeDraft,
+                Optional.of("Finbank"),
+                new LlmUsage(new ModelId("claude-opus-5-5"), 120, 900, 40, 210)))
+        .when(parser)
+        .parse(any());
+    long id = loggedTranscript("elt imza sahifasida muddat chiqsin");
+    NewTask expected = new NewTask("Muddatni ko'rsatish", claudeDraft.toNewTask().description());
+    when(api.createIssue(connection, REPO, expected, LABELS))
+        .thenReturn(task(5, "Muddatni ko'rsatish", true, null, 0));
+
+    // when
+    Screen draft = press(Actions.taskFromTranscript(id)).screen();
+    Screen added = press(Actions.addTerm(1)).screen();
+    press(Actions.TASK_EDIT_TITLE);
+    Screen edited = text("Muddatni ko'rsatish");
+    press(Actions.TASK_CONFIRM);
+
+    // then
+    assertThat(draft.html())
+        .contains("<b>Sertifikat muddatini ko'rsatish</b>")
+        .contains("## Acceptance criteria\n- [ ] Muddat sanasi ko'rinadi")
+        .contains("🤖 <i>Claude</i> · ✨ yangi imkoniyat")
+        .contains("⚠️ Claude bu taskni <b>Finbank</b> projectiga tegishli deb hisobladi")
+        .contains("✏️ Tuzatildi: <s>elt imza</s> → <b>ELT imzo</b>, <s>klayes</s> → <b>Klaes</b>")
+        .contains("🧾 claude-opus-5-5 · 1060 in (keshdan 900) · 210 out");
+    assertThat(labels(draft)).contains("💡 Lug'atga: ELT imzo", "💡 Lug'atga: Klaes");
+    assertThat(added.html()).startsWith("📖 Lug'atga qo'shildi: <b>Klaes</b>");
+    assertThat(labels(added))
+        .contains("💡 Lug'atga: ELT imzo")
+        .doesNotContain("💡 Lug'atga: Klaes");
+    assertThat(projects.find(ELT_IMZO).orElseThrow().glossary().terms()).containsExactly("Klaes");
+    assertThat(edited.html()).contains("<b>Muddatni ko'rsatish</b>").contains("🤖 <i>Claude</i>");
+    verify(api).createIssue(connection, REPO, expected, LABELS);
+  }
+
+  @Test
+  void should_fall_back_to_plain_draft_when_claude_fails() {
+    doThrow(
+            new LanguageModelException(
+                LanguageModelException.Reason.UNAVAILABLE, "Claude returned HTTP 529", null))
+        .when(parser)
+        .parse(any());
+    long id = loggedTranscript("Login sahifasini tuzat. Parol tiklansin");
+
+    Screen draft = press(Actions.taskFromTranscript(id)).screen();
+
+    assertThat(draft.html())
+        .startsWith("⚠️ Claude'ga ulanib bo'lmadi")
+        .contains("Oddiy qoralama")
+        .contains("<b>Login sahifasini tuzat</b>")
+        .doesNotContain("🤖");
+  }
+
+  @Test
+  void should_not_call_claude_when_project_has_no_repo() {
+    links.unlink(ELT_IMZO);
+    long id = loggedTranscript("Login sahifasini tuzat");
+
+    Screen screen = press(Actions.taskFromTranscript(id)).screen();
+
+    assertThat(screen.html()).contains("hali repo'ga ulanmagan");
+    verify(parser, never()).parse(any());
+  }
+
+  @Test
+  void should_ignore_term_suggestion_without_matching_draft() {
+    assertThat(press(Actions.addTerm(0)).screen().html()).startsWith("ℹ️ Qoralama topilmadi");
+
+    press(Actions.TASK_NEW);
+    text("Login");
+    text("tavsif");
+    Screen sameDraft = press(Actions.addTerm(5)).screen();
+
+    assertThat(sameDraft.html()).contains("<b>Login</b>\n\ntavsif");
+    assertThat(projects.find(ELT_IMZO).orElseThrow().glossary().isEmpty()).isTrue();
   }
 
   @Test

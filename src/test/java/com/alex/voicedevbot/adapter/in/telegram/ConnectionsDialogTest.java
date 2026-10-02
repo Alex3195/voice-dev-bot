@@ -6,16 +6,21 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.adapter.out.claude.UnconfiguredClaude;
+import com.alex.voicedevbot.application.port.in.LanguageModelProblem;
+import com.alex.voicedevbot.application.port.in.TaskDraftResult;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
+import com.alex.voicedevbot.application.service.ChooseModelService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
@@ -24,6 +29,7 @@ import com.alex.voicedevbot.application.service.ManageTasksService;
 import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.ProviderConnection;
@@ -90,8 +96,20 @@ class ConnectionsDialogTest {
             new ManageConnectionsService(
                 access, connections, GitLabFixtures.integrations(api), clock),
             repos),
-        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new TaskDialog(
+            new ManageTasksService(repoAccess),
+            repos,
+            transcripts,
+            (user, journalId) -> new TaskDraftResult.Failed(LanguageModelProblem.NOT_CONFIGURED),
+            new ManageGlossaryService(access, projects, settings)),
         new DocsDialog(new BrowseDocsService(repoAccess)),
+        new ModelDialog(
+            new ChooseModelService(
+                access,
+                settings,
+                settingsRepository,
+                new UnconfiguredClaude(),
+                new ModelId("claude-opus-5-5"))),
         ZoneOffset.UTC);
   }
 
@@ -329,7 +347,9 @@ class ConnectionsDialogTest {
             Actions.REPO_NEW + connection.id(),
             Actions.REPO_LINK + connection.id() + ":1",
             Actions.REPO_NAMESPACE + connection.id() + ":1",
-            Actions.REPO_UNLINK)) {
+            Actions.REPO_UNLINK,
+            Actions.REPO_URL,
+            Actions.repoUrlProvider(Provider.GITLAB))) {
       assertThat(conversation.onButton(STRANGER, action)).as(action).isEmpty();
     }
     assertThat(conversation.expectsSecret(STRANGER)).isFalse();
@@ -394,5 +414,107 @@ class ConnectionsDialogTest {
         .contains("https://github.com/settings/personal-access-tokens/new")
         .contains("Contents, Issues, Pull requests")
         .contains("<code>repo</code>");
+  }
+
+  @Test
+  void should_link_repo_by_url_with_existing_connection() {
+    // given
+    ProviderConnection connection = connectGitLabCom();
+    text("/addproject ELT imzo");
+    when(api.findRepo(connection, "alex/elt-imzo")).thenReturn(REPO);
+
+    // when
+    Screen choose = press(Actions.REPO).screen();
+    Screen ask = press(Actions.REPO_URL).screen();
+    Screen linked = text("https://gitlab.com/alex/elt-imzo/-/issues");
+
+    // then
+    assertThat(labels(choose)).contains("🔗 Havola bilan ulash");
+    assertThat(ask.html()).startsWith("🔗 Repo havolasini yuboring.");
+    assertThat(linked.html()).startsWith("✅ Repo ulandi").contains("alex/elt-imzo");
+  }
+
+  @Test
+  void should_keep_asking_for_url_until_it_is_understood() {
+    text("/addproject ELT imzo");
+    press(Actions.REPO_URL);
+
+    Screen again = text("salom");
+
+    assertThat(again.html()).startsWith("⚠️ Havolani tushunmadim");
+    assertThat(conversation.onText(USER, "https://gitlab.com/alex")).isPresent();
+  }
+
+  @Test
+  void should_ask_provider_of_unknown_server_then_token_then_link_repo() {
+    // given
+    text("/addproject ELT imzo");
+    ServerAddress server = ServerAddress.parse("https://git.example.uz");
+    when(api.verify(server, TOKEN)).thenReturn(VALID);
+    when(api.findRepo(any(ProviderConnection.class), eq("akfa/elt-imzo"))).thenReturn(REPO);
+    press(Actions.REPO_URL);
+
+    // when
+    Screen choose = text("https://git.example.uz/akfa/elt-imzo.git");
+    Screen askToken = press(Actions.repoUrlProvider(Provider.GITLAB)).screen();
+    boolean secretExpected = conversation.expectsSecret(USER);
+    Screen linked = text(TOKEN.value());
+
+    // then
+    assertThat(choose.html()).startsWith("🔗 <b>git.example.uz</b> uchun ulanish yo'q.");
+    assertThat(labels(choose)).containsExactly("🦊 GitLab", "✖️ Bekor qilish");
+    assertThat(askToken.html()).contains("<b>🦊 git.example.uz</b> uchun token yuboring");
+    assertThat(secretExpected).isTrue();
+    assertThat(linked.html()).startsWith("✅ Repo ulandi").doesNotContain(TOKEN.value());
+    assertThat(connections.findAll())
+        .singleElement()
+        .satisfies(saved -> assertThat(saved.address()).isEqualTo(server));
+  }
+
+  @Test
+  void should_ask_token_right_away_for_cloud_server_without_connection() {
+    text("/addproject ELT imzo");
+    press(Actions.REPO_URL);
+
+    Screen askToken = text("gitlab.com/alex/elt-imzo");
+
+    assertThat(askToken.html())
+        .startsWith("🔗 <b>gitlab.com</b> uchun ulanish yo'q — token qo'shamiz")
+        .contains("<b>🦊 gitlab.com</b> uchun token yuboring");
+    assertThat(conversation.expectsSecret(USER)).isTrue();
+  }
+
+  @Test
+  void should_link_repo_after_renewing_expired_token() {
+    // given
+    ProviderConnection expired =
+        connections.save(
+            Provider.GITLAB,
+            ServerAddress.GITLAB_COM,
+            TOKEN,
+            GitLabFixtures.expiringOn(GitLabFixtures.TODAY));
+    text("/addproject ELT imzo");
+    when(api.verify(ServerAddress.GITLAB_COM, GitLabFixtures.NEW_TOKEN)).thenReturn(VALID);
+    when(api.findRepo(any(ProviderConnection.class), eq("alex/elt-imzo"))).thenReturn(REPO);
+    press(Actions.REPO_URL);
+
+    // when
+    Screen renew = text("https://gitlab.com/alex/elt-imzo");
+    press(Actions.CONNECTION_RENEW + expired.id());
+    Screen linked = text(GitLabFixtures.NEW_TOKEN.value());
+
+    // then
+    assertThat(actions(renew)).contains(Actions.CONNECTION_RENEW + expired.id());
+    assertThat(linked.html()).startsWith("✅ Repo ulandi");
+  }
+
+  @Test
+  void should_forget_url_when_provider_button_is_stale() {
+    text("/addproject ELT imzo");
+
+    Screen screen = press(Actions.repoUrlProvider(Provider.GITLAB)).screen();
+
+    assertThat(screen.html()).startsWith("🔗 <b>ELT imzo</b> — repo ulash");
+    assertThat(conversation.expectsSecret(USER)).isFalse();
   }
 }

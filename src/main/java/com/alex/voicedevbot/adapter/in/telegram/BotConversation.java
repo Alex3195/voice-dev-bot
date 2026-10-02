@@ -65,6 +65,7 @@ public class BotConversation {
   private final ConnectionsDialog connections;
   private final TaskDialog tasks;
   private final DocsDialog docs;
+  private final ModelDialog models;
   private final ZoneId zone;
   private final Map<TelegramUserId, Pending> pending = new ConcurrentHashMap<>();
 
@@ -79,6 +80,7 @@ public class BotConversation {
       ConnectionsDialog connections,
       TaskDialog tasks,
       DocsDialog docs,
+      ModelDialog models,
       ZoneId zone) {
     this.projects = Objects.requireNonNull(projects, "projects");
     this.glossary = Objects.requireNonNull(glossary, "glossary");
@@ -87,6 +89,7 @@ public class BotConversation {
     this.connections = Objects.requireNonNull(connections, "connections");
     this.tasks = Objects.requireNonNull(tasks, "tasks");
     this.docs = Objects.requireNonNull(docs, "docs");
+    this.models = Objects.requireNonNull(models, "models");
     this.zone = Objects.requireNonNull(zone, "zone");
   }
 
@@ -117,10 +120,12 @@ public class BotConversation {
   /** Inline tugma bosildi. */
   Optional<Reply> onButton(TelegramUserId user, String data) {
     pending.remove(user);
-    connections.cancel(user);
     tasks.cancel(user);
     boolean asNewMessage = data.startsWith(Actions.NEW_MESSAGE);
     String action = asNewMessage ? data.substring(Actions.NEW_MESSAGE.length()) : data;
+    if (!ConnectionsDialog.handles(action)) {
+      connections.cancel(user);
+    }
     if (action.startsWith(Actions.SELECT_PROJECT) && !action.equals(Actions.NEW_PROJECT)) {
       return selectProjectById(user, action.substring(Actions.SELECT_PROJECT.length()));
     }
@@ -130,7 +135,7 @@ public class BotConversation {
     if (action.startsWith(Actions.SET_LANGUAGE)) {
       return changeLanguage(user, action.substring(Actions.SET_LANGUAGE.length()));
     }
-    if (action.equals(Actions.CONNECTIONS) || action.startsWith(Actions.CONNECTION_PREFIX)) {
+    if (ConnectionsDialog.handles(action)) {
       return connections.onButton(user, action);
     }
     if (TaskDialog.handles(action)) {
@@ -138,6 +143,9 @@ public class BotConversation {
     }
     if (DocsDialog.handles(action)) {
       return docs.onButton(user, action);
+    }
+    if (ModelDialog.handles(action)) {
+      return models.onButton(user, action).map(screen -> new Reply(screen, false, ""));
     }
     if (action.startsWith(Actions.TRANSCRIPTS)) {
       return listTranscripts(user, action.substring(Actions.TRANSCRIPTS.length()));
@@ -181,7 +189,8 @@ public class BotConversation {
       case Actions.LANGUAGES ->
           context(user).map(context -> BotScreens.languages(context.language()));
       case Actions.SETTINGS ->
-          context(user).map(context -> BotScreens.settings(context.language()));
+          context(user)
+              .map(context -> BotScreens.settings(context.language(), models.current(user)));
       default -> Optional.empty();
     };
   }
@@ -197,6 +206,10 @@ public class BotConversation {
       case "addproject" ->
           argument.isEmpty() ? askProjectName(user) : addProject(user, new ProjectName(argument));
       case "glossary" -> glossaryCommand(user, Command.parse("/" + argument));
+      case "model" ->
+          argument.isEmpty()
+              ? models.onButton(user, Actions.MODELS)
+              : models.choose(user, argument);
       case "lang" ->
           argument.isEmpty()
               ? screenFor(user, Actions.LANGUAGES)

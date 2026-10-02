@@ -129,6 +129,15 @@ class GitLabHttpApiIntegrationTest {
   }
 
   @Test
+  void should_find_repo_by_path_with_encoded_slashes() {
+    gitLab.stubFor(
+        get(urlEqualTo("/api/v4/projects/akfa%2Fbackend%2Felt-imzo"))
+            .willReturn(okJson(REPO_JSON)));
+
+    assertThat(api.findRepo(connection, "akfa/backend/elt-imzo").id()).isEqualTo(42);
+  }
+
+  @Test
   void should_list_personal_namespace_first() {
     gitLab.stubFor(
         get("/api/v4/namespaces?per_page=50")
