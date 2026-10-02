@@ -41,14 +41,31 @@ Telegram Update
         3. TranscriptionHintsResolver        (foydalanuvchi tili + faol project lug'ati)
              UserSettingsRepository, ProjectRepository → adapter/out/persistence (PostgreSQL)
         4. SpeechToText.transcribe(audio, hints) → adapter/out/stt/WhisperCppSpeechToText  (STT_ENGINE=stub → StubSpeechToText)
+             ← Transcription (matn + yuborilgan prompt + model)
+        5. TranscriptJournal (xatosi oqimni to'xtatmaydi, faqat log)
+             AudioArchive.store   → adapter/out/archive/DiskAudioArchive
+             TranscriptionLog.append → adapter/out/persistence/JdbcTranscriptionLog
   ← VoiceHandlingResult (sealed: Transcribed | AccessDenied)
   → VoiceDevBot javob yuboradi
 
-Telegram "/buyruq"
-  → adapter/in/telegram/TelegramCommands
-  → ManageProjectsUseCase | ManageGlossaryUseCase | ChangeLanguageUseCase  (har biri whitelist'ni tekshiradi)
-  ← sealed natija → javob matni (AccessDenied → jim)
+Telegram matn / "/buyruq" / inline tugma
+  → adapter/in/telegram/BotConversation       (ekranlar: BotScreens)
+      GitLab tugmalari ("gl…") va kutilayotgan kiritish → GitLabDialog (ekranlar: GitLabScreens)
+  → ManageProjectsUseCase | ManageGlossaryUseCase | ChangeLanguageUseCase | BrowseTranscriptsUseCase
+    | ManageGitLabUseCase | LinkRepoUseCase                    (har biri whitelist'ni tekshiradi)
+      GitLabApi → adapter/out/gitlab/GitLabHttpApi (REST v4, PRIVATE-TOKEN)
+      GitLabConnectionRepository → JdbcGitLabConnectionRepository (token: TokenCipher, AES-GCM)
+      ProjectRepoLinks → JdbcProjectRepoLinks; RepoTemplate → adapter/out/template/ClasspathRepoTemplate
+  ← sealed natija → Screen (AccessDenied → jim); token yozilgan xabar VoiceDevBot tomonidan o'chiriladi
+
+Rejalashtirilgan (config'dagi ScheduledExecutorService, soatiga bir marta)
+  → adapter/in/telegram/TokenExpiryNotifier
+  → TokenExpiryAlertsUseCase (har ulanish uchun kuniga bir marta — sana bazada belgilanadi)
+  → VoiceDevBot.notify → whitelist'dagi har bir user
 ```
+
+`application` qatlami SLF4J'ga bog'lana olmaydi (ArchUnit), shuning uchun u yerda yagona log —
+`TranscriptJournal`dagi JDK `System.Logger` (Spring Boot uni SLF4J'ga yo'naltiradi).
 
 Persistence adapteri oddiy JDBC (`javax.sql.DataSource`) — Spring faqat `config`da bo'lgani uchun
 `JdbcClient` ishlatilmaydi. DataSource va Flyway migratsiyalarini (`src/main/resources/db/migration`)
