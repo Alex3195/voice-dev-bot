@@ -39,6 +39,8 @@ final class ModelScreens {
           "ℹ️ Claude ulanmagan: <code>.env</code>ga <code>ANTHROPIC_API_KEY</code> qo'shing va"
               + " botni qayta ishga tushiring.";
       case UNAUTHORIZED -> "⚠️ Claude kaliti qabul qilinmadi (<code>ANTHROPIC_API_KEY</code>).";
+      case NO_CREDIT ->
+          "💳 Anthropic hisobida kredit tugagan — console.anthropic.com → Plans &amp; Billing.";
       case MODEL_UNAVAILABLE ->
           "⚠️ Model bu so'rovni qabul qilmadi — /model bilan boshqasini tanlang.";
       case REFUSED -> "⚠️ Claude bu matndan task tuzishni rad etdi.";

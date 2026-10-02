@@ -12,6 +12,7 @@ final class LanguageModelProblems {
     return switch (e.reason()) {
       case NOT_CONFIGURED -> LanguageModelProblem.NOT_CONFIGURED;
       case UNAUTHORIZED -> LanguageModelProblem.UNAUTHORIZED;
+      case NO_CREDIT -> LanguageModelProblem.NO_CREDIT;
       case MODEL_UNAVAILABLE -> LanguageModelProblem.MODEL_UNAVAILABLE;
       case REFUSED -> LanguageModelProblem.REFUSED;
       case INVALID_RESPONSE -> LanguageModelProblem.INVALID_RESPONSE;

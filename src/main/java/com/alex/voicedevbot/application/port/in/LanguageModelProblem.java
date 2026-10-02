@@ -5,6 +5,7 @@ public enum LanguageModelProblem {
   /** Kalit berilmagan: Claude o'chiq, oddiy qoralama ishlatiladi. */
   NOT_CONFIGURED,
   UNAUTHORIZED,
+  NO_CREDIT,
   MODEL_UNAVAILABLE,
   REFUSED,
   INVALID_RESPONSE,
