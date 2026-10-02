@@ -34,7 +34,7 @@ Bot whisper.cpp `whisper-server`ga HTTP orqali ulanadi. Qayerda ishlashi muhim e
 
 ```bash
 mkdir -p ~/.local/share/whisper-models && cd ~/.local/share/whisper-models
-curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
+curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin
 ```
 
 | Muhit | Ishga tushirish | `STT_WHISPER_URL` |
@@ -45,6 +45,10 @@ curl -LO https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3
 
 Docker sozlamalari: `WHISPER_MODELS_DIR` (default `./models`), `WHISPER_MODEL`, `WHISPER_BIND`, `WHISPER_PORT` (default `8178`).
 Rasmiy image faqat amd64 — Apple Silicon'da emulyatsiya juda sekin, dev uchun native ishlating.
+
+**O'zbekcha aniqlik.** Whisper o'zbek tilida zaifroq, shuning uchun:
+- to'liq `large-v3` (turbo emas) va `--beam-size 5` ishlatiladi;
+- bot har so'rov bilan `STT_WHISPER_PROMPT` yuboradi: lotin yozuvidagi namuna (aks holda matn goh kirill, goh turkcha imloda chiqadi) va atamalar lug'ati (project nomlari, texnik so'zlar). Lug'atga yangi atamalarni shu yerga qo'shing.
 
 ## Sozlamalar
 
@@ -59,6 +63,7 @@ Spring `.env` faylni avtomatik o'qiydi (`spring.config.import`); serverda oddiy 
 | `STT_ENGINE` | `whisper-cpp` yoki `stub` (Whisper'siz) | `whisper-cpp` |
 | `STT_WHISPER_URL` | whisper-server manzili | `http://127.0.0.1:8178` |
 | `STT_WHISPER_LANGUAGE` | Nutq tili | `uz` |
+| `STT_WHISPER_PROMPT` | Lotin namunasi + atamalar lug'ati | o'zbekcha lotin namuna gap |
 | `STT_WHISPER_TIMEOUT` | Bitta voice uchun maksimal vaqt | `120s` |
 
 Majburiy sozlama bo'lmasa ilova ishga tushmaydi. `.env` commit qilinmaydi.

@@ -15,4 +15,6 @@ stt:
   whisper:
     url: ${STT_WHISPER_URL:http://127.0.0.1:8178}
     language: ${STT_WHISPER_LANGUAGE:uz}
+    # Whisper o'zbekchada goh kirill, goh turkcha imloga o'tib ketadi — lotin namunasi buni barqarorlashtiradi
+    prompt: ${STT_WHISPER_PROMPT:Assalomu alaykum. Bu matn o'zbek tilida, lotin yozuvida yozilgan.}
     timeout: ${STT_WHISPER_TIMEOUT:120s}

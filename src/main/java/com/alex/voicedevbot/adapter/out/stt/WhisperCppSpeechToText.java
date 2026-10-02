@@ -11,7 +11,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -30,16 +29,13 @@ public class WhisperCppSpeechToText implements SpeechToText {
   private static final int HTTP_OK = 200;
 
   private final HttpClient httpClient;
+  private final WhisperCppSettings settings;
   private final URI inferenceUri;
-  private final String language;
-  private final Duration timeout;
 
-  public WhisperCppSpeechToText(
-      HttpClient httpClient, URI serverUrl, String language, Duration timeout) {
+  public WhisperCppSpeechToText(HttpClient httpClient, WhisperCppSettings settings) {
     this.httpClient = Objects.requireNonNull(httpClient, "httpClient");
-    this.inferenceUri = Objects.requireNonNull(serverUrl, "serverUrl").resolve(INFERENCE_PATH);
-    this.language = Objects.requireNonNull(language, "language");
-    this.timeout = Objects.requireNonNull(timeout, "timeout");
+    this.settings = Objects.requireNonNull(settings, "settings");
+    this.inferenceUri = settings.serverUrl().resolve(INFERENCE_PATH);
   }
 
   @Override
@@ -58,7 +54,7 @@ public class WhisperCppSpeechToText implements SpeechToText {
     String boundary = "voice-dev-bot-" + UUID.randomUUID();
     HttpRequest request =
         HttpRequest.newBuilder(inferenceUri)
-            .timeout(timeout)
+            .timeout(settings.timeout())
             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
             .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(audio, boundary)))
             .build();
@@ -75,7 +71,10 @@ public class WhisperCppSpeechToText implements SpeechToText {
 
   private byte[] multipartBody(AudioClip audio, String boundary) throws IOException {
     ByteArrayOutputStream body = new ByteArrayOutputStream();
-    writeTextPart(body, boundary, "language", language);
+    writeTextPart(body, boundary, "language", settings.language());
+    if (settings.hasPrompt()) {
+      writeTextPart(body, boundary, "prompt", settings.prompt());
+    }
     writeTextPart(body, boundary, "response_format", RESPONSE_FORMAT);
     writeAscii(body, "--" + boundary + CRLF);
     writeAscii(body, "Content-Disposition: form-data; name=\"file\"; filename=\"audio\"" + CRLF);

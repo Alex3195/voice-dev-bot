@@ -1,6 +1,7 @@
 package com.alex.voicedevbot.config;
 
 import com.alex.voicedevbot.adapter.out.stt.StubSpeechToText;
+import com.alex.voicedevbot.adapter.out.stt.WhisperCppSettings;
 import com.alex.voicedevbot.adapter.out.stt.WhisperCppSpeechToText;
 import com.alex.voicedevbot.application.port.out.SpeechToText;
 import java.net.http.HttpClient;
@@ -23,7 +24,9 @@ class SttConfig {
     SttProperties.Whisper whisper = properties.whisper();
     HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     return new WhisperCppSpeechToText(
-        httpClient, whisper.url(), whisper.language(), whisper.timeout());
+        httpClient,
+        new WhisperCppSettings(
+            whisper.url(), whisper.language(), whisper.prompt(), whisper.timeout()));
   }
 
   @Bean

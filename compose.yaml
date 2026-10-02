@@ -11,9 +11,10 @@ x-whisper: &whisper
   command:
     - >-
       whisper-server
-      --model /models/${WHISPER_MODEL:-ggml-large-v3-turbo-q5_0.bin}
+      --model /models/${WHISPER_MODEL:-ggml-large-v3-q5_0.bin}
       --host 0.0.0.0 --port 8080
       --language ${STT_WHISPER_LANGUAGE:-uz}
+      --beam-size 5
       --convert
   volumes:
     - ${WHISPER_MODELS_DIR:-./models}:/models:ro

@@ -6,7 +6,8 @@
 set -euo pipefail
 
 MODELS_DIR="${WHISPER_MODELS_DIR:-$HOME/.local/share/whisper-models}"
-MODEL="${WHISPER_MODEL:-ggml-large-v3-turbo-q5_0.bin}"
+# turbo tezroq, lekin o'zbekchada sezilarli zaif — to'liq large-v3 ishlatiladi
+MODEL="${WHISPER_MODEL:-ggml-large-v3-q5_0.bin}"
 PORT="${WHISPER_PORT:-8178}"
 LANGUAGE="${STT_WHISPER_LANGUAGE:-uz}"
 
@@ -22,4 +23,5 @@ exec whisper-server \
   --model "$MODELS_DIR/$MODEL" \
   --host 127.0.0.1 --port "$PORT" \
   --language "$LANGUAGE" \
+  --beam-size 5 \
   --convert

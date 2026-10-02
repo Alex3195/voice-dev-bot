@@ -30,6 +30,7 @@ class WhisperCppSpeechToTextIntegrationTest {
 
   private static final AudioClip AUDIO = new AudioClip(new byte[] {1, 2, 3}, "audio/ogg");
   private static final Duration TIMEOUT = Duration.ofSeconds(2);
+  private static final String PROMPT = "Loyihalar: ELT imzo, kassa bo'limi.";
 
   @RegisterExtension
   static WireMockExtension whisper =
@@ -39,9 +40,12 @@ class WhisperCppSpeechToTextIntegrationTest {
 
   @BeforeEach
   void setUp() {
-    speechToText =
-        new WhisperCppSpeechToText(
-            HttpClient.newHttpClient(), URI.create(whisper.baseUrl()), "uz", TIMEOUT);
+    speechToText = whisperAt(whisper.baseUrl(), PROMPT);
+  }
+
+  private static WhisperCppSpeechToText whisperAt(String url, String prompt) {
+    return new WhisperCppSpeechToText(
+        HttpClient.newHttpClient(), new WhisperCppSettings(URI.create(url), "uz", prompt, TIMEOUT));
   }
 
   @Test
@@ -66,7 +70,19 @@ class WhisperCppSpeechToTextIntegrationTest {
                     .withHeader("Content-Type", equalTo("audio/ogg"))
                     .withBody(binaryEqualTo(new byte[] {1, 2, 3})))
             .withAnyRequestBodyPart(aMultipart("language").withBody(equalTo("uz")))
-            .withAnyRequestBodyPart(aMultipart("response_format").withBody(equalTo("text"))));
+            .withAnyRequestBodyPart(aMultipart("response_format").withBody(equalTo("text")))
+            .withAnyRequestBodyPart(aMultipart("prompt").withBody(equalTo(PROMPT))));
+  }
+
+  @Test
+  void should_not_send_prompt_when_it_is_blank() {
+    whisper.stubFor(post(urlPathEqualTo("/inference")).willReturn(ok("salom")));
+
+    whisperAt(whisper.baseUrl(), " ").transcribe(AUDIO);
+
+    assertThat(whisper.getAllServeEvents().getFirst().getRequest().getBodyAsString())
+        .contains("name=\"language\"")
+        .doesNotContain("name=\"prompt\"");
   }
 
   @Test
@@ -103,9 +119,7 @@ class WhisperCppSpeechToTextIntegrationTest {
 
   @Test
   void should_throw_transcription_exception_when_server_is_unreachable() {
-    WhisperCppSpeechToText unreachable =
-        new WhisperCppSpeechToText(
-            HttpClient.newHttpClient(), URI.create("http://localhost:1"), "uz", TIMEOUT);
+    WhisperCppSpeechToText unreachable = whisperAt("http://localhost:1", PROMPT);
 
     assertThatThrownBy(() -> unreachable.transcribe(AUDIO))
         .isInstanceOf(TranscriptionException.class);
