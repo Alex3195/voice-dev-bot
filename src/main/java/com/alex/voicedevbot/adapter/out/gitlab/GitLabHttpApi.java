@@ -8,6 +8,9 @@ import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.GitLabNamespace;
 import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.domain.MergeRequest;
+import com.alex.voicedevbot.domain.NewTask;
+import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.io.IOException;
 import java.net.URI;
@@ -22,9 +25,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -40,6 +46,12 @@ public class GitLabHttpApi implements GitLabApi {
   static final int PAGE_SIZE = 10;
   static final String INITIAL_BRANCH = "main";
   static final String INITIAL_COMMIT = "chore: voice-dev-bot agent rules and docs structure";
+
+  /** GitLab ruxsat beradigan eng katta sahifa. */
+  static final int MAX_PAGE_SIZE = 100;
+
+  /** Juda katta {@code docs/} papkasida cheksiz o'qimaslik uchun. */
+  static final int MAX_FILES = 500;
 
   private static final int HTTP_OK_MIN = 200;
   private static final int HTTP_OK_MAX = 299;
@@ -121,6 +133,139 @@ public class GitLabHttpApi implements GitLabApi {
     return repo;
   }
 
+  @Override
+  public List<Task> issues(GitLabConnection connection, long repoId, int limit) {
+    List<Task> result = new ArrayList<>();
+    pages(
+        connection,
+        "/projects/" + repoId + "/issues?scope=all&state=all&order_by=created_at&sort=desc",
+        limit,
+        issue -> result.add(taskOf(issue)));
+    return result;
+  }
+
+  @Override
+  public Task issue(GitLabConnection connection, long repoId, long iid) {
+    return taskOf(get(connection, issuePath(repoId, iid)));
+  }
+
+  @Override
+  public List<MergeRequest> mergeRequests(GitLabConnection connection, long repoId, long iid) {
+    List<MergeRequest> result = new ArrayList<>();
+    get(connection, issuePath(repoId, iid) + "/related_merge_requests")
+        .forEach(
+            mergeRequest ->
+                result.add(
+                    new MergeRequest(
+                        mergeRequest.path("iid").asLong(),
+                        mergeRequest.path("title").asString(),
+                        mergeRequestState(mergeRequest.path("state").asString()),
+                        URI.create(mergeRequest.path("web_url").asString()))));
+    return result;
+  }
+
+  @Override
+  public Task createIssue(
+      GitLabConnection connection, long repoId, NewTask task, List<String> labels) {
+    ObjectNode issue = json.createObjectNode();
+    issue.put("title", task.title());
+    issue.put("description", task.description());
+    issue.put("labels", String.join(",", labels));
+    return taskOf(post(connection, "/projects/" + repoId + "/issues", issue));
+  }
+
+  @Override
+  public Task setIssueOpen(GitLabConnection connection, long repoId, long iid, boolean open) {
+    ObjectNode change = json.createObjectNode();
+    change.put("state_event", open ? "reopen" : "close");
+    return taskOf(put(connection, issuePath(repoId, iid), change));
+  }
+
+  @Override
+  public List<String> files(
+      GitLabConnection connection, long repoId, String directory, boolean recursive) {
+    String path = directory.isEmpty() ? "" : "&path=" + encode(directory);
+    List<String> result = new ArrayList<>();
+    try {
+      pages(
+          connection,
+          "/projects/" + repoId + "/repository/tree?recursive=" + recursive + path,
+          MAX_FILES,
+          entry -> {
+            if ("blob".equals(entry.path("type").asString())) {
+              result.add(entry.path("path").asString());
+            }
+          });
+    } catch (GitLabException e) {
+      if (e.reason() == Reason.NOT_FOUND) {
+        return List.of();
+      }
+      throw e;
+    }
+    return result;
+  }
+
+  @Override
+  public Optional<String> readFile(GitLabConnection connection, long repoId, String path) {
+    String request = "/projects/" + repoId + "/repository/files/" + encodeSegment(path) + "/raw";
+    try {
+      return Optional.of(
+          sendForText(
+              request(connection.address(), connection.token(), request).GET().build(),
+              "GET " + request));
+    } catch (GitLabException e) {
+      if (e.reason() == Reason.NOT_FOUND) {
+        return Optional.empty();
+      }
+      throw e;
+    }
+  }
+
+  private static String issuePath(long repoId, long iid) {
+    return "/projects/" + repoId + "/issues/" + iid;
+  }
+
+  private static Task taskOf(JsonNode issue) {
+    String dueDate = issue.path("due_date").asString("");
+    return new Task(
+        issue.path("iid").asLong(),
+        issue.path("title").asString(),
+        issue.path("description").asString(""),
+        "opened".equals(issue.path("state").asString()),
+        dueDate.isEmpty() ? Optional.empty() : Optional.of(LocalDate.parse(dueDate)),
+        issue.path("merge_requests_count").asInt(0),
+        URI.create(issue.path("web_url").asString()));
+  }
+
+  /** {@code locked} — merge jarayonidagi ochiq MR. */
+  private static MergeRequest.State mergeRequestState(String state) {
+    return switch (state.toLowerCase(Locale.ROOT)) {
+      case "merged" -> MergeRequest.State.MERGED;
+      case "closed" -> MergeRequest.State.CLOSED;
+      default -> MergeRequest.State.OPENED;
+    };
+  }
+
+  /** Sahifalab o'qiydi: sahifa to'lmaguncha yoki {@code limit}ga yetguncha. */
+  private void pages(
+      GitLabConnection connection, String pathWithQuery, int limit, Consumer<JsonNode> each) {
+    int read = 0;
+    for (int page = 1; read < limit; page++) {
+      JsonNode items =
+          get(connection, pathWithQuery + "&per_page=" + MAX_PAGE_SIZE + "&page=" + page);
+      for (JsonNode item : items) {
+        if (read == limit) {
+          return;
+        }
+        each.accept(item);
+        read++;
+      }
+      if (items.size() < MAX_PAGE_SIZE) {
+        return;
+      }
+    }
+  }
+
   private ObjectNode commitOf(Map<String, String> files) {
     ObjectNode commit = json.createObjectNode();
     commit.put("branch", INITIAL_BRANCH);
@@ -162,6 +307,15 @@ public class GitLabHttpApi implements GitLabApi {
     return send(request, "POST " + path);
   }
 
+  private JsonNode put(GitLabConnection connection, String path, JsonNode body) {
+    HttpRequest request =
+        request(connection.address(), connection.token(), path)
+            .header("Content-Type", "application/json")
+            .PUT(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
+            .build();
+    return send(request, "PUT " + path);
+  }
+
   private HttpRequest.Builder request(GitLabAddress address, GitLabToken token, String path) {
     return HttpRequest.newBuilder(address.api(path))
         .timeout(timeout)
@@ -173,6 +327,15 @@ public class GitLabHttpApi implements GitLabApi {
    * @param description xato xabari uchun ({@code GET /user}) — so'rov manzilisiz, unda sir yo'q
    */
   private JsonNode send(HttpRequest request, String description) {
+    String body = sendForText(request, description);
+    try {
+      return json.readTree(body);
+    } catch (JacksonException e) {
+      throw new GitLabException(Reason.UNAVAILABLE, description + " returned invalid JSON", e);
+    }
+  }
+
+  private String sendForText(HttpRequest request, String description) {
     HttpResponse<String> response;
     try {
       response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -187,11 +350,7 @@ public class GitLabHttpApi implements GitLabApi {
       throw new GitLabException(
           reasonOf(status, response.body()), description + " returned HTTP " + status, null);
     }
-    try {
-      return json.readTree(response.body());
-    } catch (JacksonException e) {
-      throw new GitLabException(Reason.UNAVAILABLE, description + " returned invalid JSON", e);
-    }
+    return response.body();
   }
 
   /** GitLab band nomni 400 "has already been taken" bilan qaytaradi. */
@@ -209,5 +368,10 @@ public class GitLabHttpApi implements GitLabApi {
 
   private static String encode(String text) {
     return URLEncoder.encode(text, StandardCharsets.UTF_8);
+  }
+
+  /** Yo'l qismi: {@code /} ham kodlanadi ({@code %2F}), bo'sh joy — {@code %20}. */
+  private static String encodeSegment(String text) {
+    return encode(text).replace("+", "%20");
   }
 }

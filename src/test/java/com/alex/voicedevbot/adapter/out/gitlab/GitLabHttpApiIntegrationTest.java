@@ -8,6 +8,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.put;
+import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -21,14 +23,21 @@ import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.GitLabNamespace;
 import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.domain.MergeRequest;
+import com.alex.voicedevbot.domain.NewTask;
+import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TokenInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -211,5 +220,168 @@ class GitLabHttpApiIntegrationTest {
     assertThatThrownBy(() -> api.findRepo(unreachable, 42))
         .isInstanceOfSatisfying(
             GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAVAILABLE));
+  }
+
+  private static String issueJson(int iid, String state, String dueDate, int mergeRequests) {
+    String due = dueDate == null ? "null" : "\"" + dueDate + "\"";
+    return """
+        {"iid": %d, "title": "Task %d", "description": null, "state": "%s", "due_date": %s,
+         "merge_requests_count": %d,
+         "web_url": "https://gitlab.example/alex/elt-imzo/-/issues/%d"}
+        """
+        .formatted(iid, iid, state, due, mergeRequests, iid);
+  }
+
+  @Test
+  void should_read_all_issues_page_by_page_up_to_limit() {
+    String fullPage =
+        IntStream.rangeClosed(1, GitLabHttpApi.MAX_PAGE_SIZE)
+            .mapToObj(iid -> issueJson(iid, "opened", null, 0))
+            .collect(Collectors.joining(",", "[", "]"));
+    String issuesPath =
+        "/api/v4/projects/42/issues?scope=all&state=all&order_by=created_at&sort=desc&per_page=100";
+    gitLab.stubFor(get(issuesPath + "&page=1").willReturn(okJson(fullPage)));
+    gitLab.stubFor(
+        get(issuesPath + "&page=2")
+            .willReturn(
+                okJson(
+                    "["
+                        + issueJson(101, "closed", "2026-10-01", 2)
+                        + ","
+                        + issueJson(102, "opened", null, 0)
+                        + "]")));
+
+    List<Task> all = api.issues(connection, 42, 500);
+    List<Task> limited = api.issues(connection, 42, 101);
+
+    assertThat(all).hasSize(102);
+    assertThat(all.get(100))
+        .isEqualTo(
+            new Task(
+                101,
+                "Task 101",
+                "",
+                false,
+                Optional.of(LocalDate.of(2026, 10, 1)),
+                2,
+                URI.create("https://gitlab.example/alex/elt-imzo/-/issues/101")));
+    assertThat(limited).hasSize(101);
+  }
+
+  @Test
+  void should_read_one_issue_and_its_merge_requests() {
+    gitLab.stubFor(
+        get("/api/v4/projects/42/issues/7").willReturn(okJson(issueJson(7, "opened", null, 1))));
+    gitLab.stubFor(
+        get("/api/v4/projects/42/issues/7/related_merge_requests")
+            .willReturn(
+                okJson(
+                    """
+                    [{"iid": 3, "title": "Fix", "state": "merged", "web_url": "https://mr/3"},
+                     {"iid": 4, "title": "Old", "state": "closed", "web_url": "https://mr/4"},
+                     {"iid": 5, "title": "Wip", "state": "locked", "web_url": "https://mr/5"}]
+                    """)));
+
+    assertThat(api.issue(connection, 42, 7).open()).isTrue();
+    assertThat(api.mergeRequests(connection, 42, 7))
+        .extracting(MergeRequest::state)
+        .containsExactly(
+            MergeRequest.State.MERGED, MergeRequest.State.CLOSED, MergeRequest.State.OPENED);
+  }
+
+  @Test
+  void should_create_issue_with_labels() {
+    gitLab.stubFor(
+        post("/api/v4/projects/42/issues").willReturn(okJson(issueJson(8, "opened", null, 0))));
+
+    Task created =
+        api.createIssue(connection, 42, new NewTask("Login", "Parol"), List.of("ai-task", "bot"));
+
+    assertThat(created.iid()).isEqualTo(8);
+    gitLab.verify(
+        postRequestedFor(urlEqualTo("/api/v4/projects/42/issues"))
+            .withRequestBody(
+                equalToJson(
+                    "{\"title\": \"Login\", \"description\": \"Parol\","
+                        + " \"labels\": \"ai-task,bot\"}")));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"false, close, closed", "true, reopen, opened"})
+  void should_close_or_reopen_issue(boolean open, String event, String state) {
+    gitLab.stubFor(
+        put("/api/v4/projects/42/issues/7").willReturn(okJson(issueJson(7, state, null, 0))));
+
+    Task task = api.setIssueOpen(connection, 42, 7, open);
+
+    assertThat(task.open()).isEqualTo(open);
+    gitLab.verify(
+        putRequestedFor(urlEqualTo("/api/v4/projects/42/issues/7"))
+            .withRequestBody(equalToJson("{\"state_event\": \"" + event + "\"}")));
+  }
+
+  @Test
+  void should_list_only_files_of_directory_tree() {
+    gitLab.stubFor(
+        get("/api/v4/projects/42/repository/tree?recursive=true&path=docs&per_page=100&page=1")
+            .willReturn(
+                okJson(
+                    """
+                    [{"path": "docs/specs", "type": "tree"},
+                     {"path": "docs/specs/001-login.md", "type": "blob"},
+                     {"path": "docs/roadmap.md", "type": "blob"}]
+                    """)));
+    gitLab.stubFor(
+        get("/api/v4/projects/42/repository/tree?recursive=false&per_page=100&page=1")
+            .willReturn(okJson("[{\"path\": \"CLAUDE.md\", \"type\": \"blob\"}]")));
+
+    assertThat(api.files(connection, 42, "docs", true))
+        .containsExactly("docs/specs/001-login.md", "docs/roadmap.md");
+    assertThat(api.files(connection, 42, "", false)).containsExactly("CLAUDE.md");
+  }
+
+  @Test
+  void should_return_no_files_when_directory_is_missing() {
+    gitLab.stubFor(
+        get(urlPathEqualTo("/api/v4/projects/42/repository/tree"))
+            .willReturn(
+                aResponse().withStatus(404).withBody("{\"message\": \"404 Tree Not Found\"}")));
+
+    assertThat(api.files(connection, 42, "docs", true)).isEmpty();
+  }
+
+  @Test
+  void should_read_raw_file_with_encoded_path() {
+    gitLab.stubFor(
+        get("/api/v4/projects/42/repository/files/docs%2Fmy%20notes.md/raw")
+            .willReturn(aResponse().withBody("# Eslatma\n<b>")));
+
+    assertThat(api.readFile(connection, 42, "docs/my notes.md")).contains("# Eslatma\n<b>");
+  }
+
+  @Test
+  void should_return_empty_when_file_is_missing_and_fail_on_other_errors() {
+    gitLab.stubFor(
+        get("/api/v4/projects/42/repository/files/CLAUDE.md/raw")
+            .willReturn(aResponse().withStatus(404)));
+    gitLab.stubFor(
+        get("/api/v4/projects/42/repository/files/README.md/raw")
+            .willReturn(aResponse().withStatus(403)));
+
+    assertThat(api.readFile(connection, 42, "CLAUDE.md")).isEmpty();
+    assertThatThrownBy(() -> api.readFile(connection, 42, "README.md"))
+        .isInstanceOfSatisfying(
+            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.FORBIDDEN));
+  }
+
+  @Test
+  void should_fail_listing_files_on_errors_other_than_not_found() {
+    gitLab.stubFor(
+        get(urlPathEqualTo("/api/v4/projects/42/repository/tree"))
+            .willReturn(aResponse().withStatus(401)));
+
+    assertThatThrownBy(() -> api.files(connection, 42, "", false))
+        .isInstanceOfSatisfying(
+            GitLabException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAUTHORIZED));
   }
 }

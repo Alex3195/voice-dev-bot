@@ -20,6 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,7 +46,6 @@ public class BotConversation {
           new BotMenuItem("help", "❓ Yordam"));
 
   static final String INVALID_INPUT = "⚠️ Noto'g'ri qiymat, qaytadan urinib ko'ring.";
-  static final String SOON_TOAST = "⏳ Tez orada";
   static final String PROJECT_NOT_FOUND = "Project topilmadi";
 
   /** {@code <project id yoki "-">:<sahifa>} — {@link Actions#transcripts}. */
@@ -63,6 +63,8 @@ public class BotConversation {
   private final ChangeLanguageUseCase language;
   private final BrowseTranscriptsUseCase transcripts;
   private final GitLabDialog gitLab;
+  private final TaskDialog tasks;
+  private final DocsDialog docs;
   private final ZoneId zone;
   private final Map<TelegramUserId, Pending> pending = new ConcurrentHashMap<>();
 
@@ -75,12 +77,16 @@ public class BotConversation {
       ChangeLanguageUseCase language,
       BrowseTranscriptsUseCase transcripts,
       GitLabDialog gitLab,
+      TaskDialog tasks,
+      DocsDialog docs,
       ZoneId zone) {
     this.projects = Objects.requireNonNull(projects, "projects");
     this.glossary = Objects.requireNonNull(glossary, "glossary");
     this.language = Objects.requireNonNull(language, "language");
     this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
     this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
+    this.tasks = Objects.requireNonNull(tasks, "tasks");
+    this.docs = Objects.requireNonNull(docs, "docs");
     this.zone = Objects.requireNonNull(zone, "zone");
   }
 
@@ -89,7 +95,11 @@ public class BotConversation {
     if (!isCommand(text) && gitLab.awaitsInput(user)) {
       return gitLab.onText(user, text);
     }
+    if (!isCommand(text) && tasks.awaitsInput(user)) {
+      return tasks.onText(user, text);
+    }
     gitLab.cancel(user);
+    tasks.cancel(user);
     Pending awaited = pending.remove(user);
     try {
       if (isCommand(text)) {
@@ -108,6 +118,7 @@ public class BotConversation {
   Optional<Reply> onButton(TelegramUserId user, String data) {
     pending.remove(user);
     gitLab.cancel(user);
+    tasks.cancel(user);
     boolean asNewMessage = data.startsWith(Actions.NEW_MESSAGE);
     String action = asNewMessage ? data.substring(Actions.NEW_MESSAGE.length()) : data;
     if (action.startsWith(Actions.SELECT_PROJECT) && !action.equals(Actions.NEW_PROJECT)) {
@@ -122,9 +133,11 @@ public class BotConversation {
     if (action.equals(Actions.GITLAB) || action.startsWith(Actions.GITLAB_PREFIX)) {
       return gitLab.onButton(user, action);
     }
-    if (action.startsWith(Actions.SOON)) {
-      return selectProjectById(user, action.substring(Actions.SOON.length()))
-          .map(reply -> new Reply(reply.screen(), false, SOON_TOAST));
+    if (TaskDialog.handles(action)) {
+      return tasks.onButton(user, action, asNewMessage);
+    }
+    if (DocsDialog.handles(action)) {
+      return docs.onButton(user, action);
     }
     if (action.startsWith(Actions.TRANSCRIPTS)) {
       return listTranscripts(user, action.substring(Actions.TRANSCRIPTS.length()));
@@ -140,10 +153,15 @@ public class BotConversation {
     return gitLab.expectsSecret(user);
   }
 
-  /** Transkript ostida faol project va til; foydalanuvchi allaqachon whitelist'dan o'tgan. */
-  Screen transcript(TelegramUserId user, String text) {
+  /**
+   * Transkript ostida faol project va til; foydalanuvchi allaqachon whitelist'dan o'tgan.
+   *
+   * @param journalId jurnaldagi raqam — bo'lsa, {@code ✅ Task yaratish} tugmasi chiqadi
+   */
+  Screen transcript(TelegramUserId user, String text, OptionalLong journalId) {
     return context(user)
-        .map(context -> BotScreens.transcript(text, context.active(), context.language()))
+        .map(
+            context -> BotScreens.transcript(text, context.active(), context.language(), journalId))
         .orElseGet(() -> Screen.text("📝 <b>Matn</b>\n\n" + Html.escape(text)));
   }
 

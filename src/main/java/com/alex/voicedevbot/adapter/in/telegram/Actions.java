@@ -1,5 +1,6 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
+import com.alex.voicedevbot.domain.TaskStatus;
 import java.util.Locale;
 
 /**
@@ -26,7 +27,6 @@ final class Actions {
   static final String SET_LANGUAGE = "lang:";
   static final String CANCEL = "cancel";
   static final String SETTINGS = "settings";
-  static final String SOON = "soon:";
   static final String TRANSCRIPTS = "tr:";
   static final String OPEN_TRANSCRIPT = "tro:";
 
@@ -47,6 +47,24 @@ final class Actions {
   static final String REPO_NAMESPACE = "gl:ns:";
   static final String REPO_UNLINK = "gl:unlink";
 
+  static final String TASKS = "tk";
+  static final String TASK_PREFIX = "tk:";
+  static final String TASK_GROUP = "tk:g:";
+  static final String TASK_OPEN = "tk:o:";
+  static final String TASK_CLOSE = "tk:c:";
+  static final String TASK_REOPEN = "tk:r:";
+  static final String TASK_NEW = "tk:new";
+  static final String TASK_FROM_TRANSCRIPT = "tk:tr:";
+  static final String TASK_EDIT_TITLE = "tk:et";
+  static final String TASK_EDIT_DESCRIPTION = "tk:ed";
+  static final String TASK_SKIP_DESCRIPTION = "tk:nd";
+  static final String TASK_CONFIRM = "tk:ok";
+  static final String TASK_REVIEW = "tk:rv";
+  static final String TASK_DISCARD = "tk:x";
+
+  static final String DOCS = "dc";
+  static final String DOC_PREFIX = "dc:";
+
   /** {@link #transcripts} da projectsiz transkriptlar uchun project o'rnidagi belgi. */
   static final String WITHOUT_PROJECT = "-";
 
@@ -64,11 +82,6 @@ final class Actions {
     return SET_LANGUAGE + code;
   }
 
-  /** Hali tayyor bo'lmagan bo'lim: project kartochkasi qayta ko'rsatiladi. */
-  static String soon(String projectKey) {
-    return SOON + idOf(projectKey);
-  }
-
   /**
    * @param projectKey {@code null} — projectsiz transkriptlar
    */
@@ -79,6 +92,27 @@ final class Actions {
 
   static String openTranscript(long id) {
     return NEW_MESSAGE + OPEN_TRANSCRIPT + id;
+  }
+
+  /**
+   * @param page 0 dan boshlanadi
+   */
+  static String taskGroup(TaskStatus status, int page) {
+    return TASK_GROUP + status.name() + ":" + page;
+  }
+
+  static String openTask(long iid) {
+    return TASK_OPEN + iid;
+  }
+
+  /** Transkript ostida — yangi xabar bo'lib chiqadi, transkript o'chmaydi. */
+  static String taskFromTranscript(long journalId) {
+    return NEW_MESSAGE + TASK_FROM_TRANSCRIPT + journalId;
+  }
+
+  /** Hujjat yo'li 64 baytdan uzun bo'lishi mumkin — uning hash'i yoziladi. */
+  static String document(String path, int page) {
+    return DOC_PREFIX + idOf(path) + ":" + page;
   }
 
   static String idOf(String key) {

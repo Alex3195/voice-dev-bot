@@ -26,6 +26,7 @@ import com.alex.voicedevbot.domain.Transcript;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -72,8 +73,9 @@ class VoiceDevBotTest {
   void should_reply_with_transcript_screen_when_voice_is_transcribed() throws TelegramApiException {
     // given
     when(useCase.handle(any()))
-        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("yangi task")));
-    when(conversation.transcript(USER, "yangi task")).thenReturn(MENU_SCREEN);
+        .thenReturn(
+            new VoiceHandlingResult.Transcribed(new Transcript("yangi task"), OptionalLong.of(7)));
+    when(conversation.transcript(USER, "yangi task", OptionalLong.of(7))).thenReturn(MENU_SCREEN);
 
     // when
     bot.consume(voiceUpdate());
@@ -100,8 +102,8 @@ class VoiceDevBotTest {
   @Test
   void should_transcribe_audio_file_when_it_is_sent_as_document() {
     when(useCase.handle(any()))
-        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("x")));
-    when(conversation.transcript(any(), any())).thenReturn(Screen.text("x"));
+        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("x"), OptionalLong.empty()));
+    when(conversation.transcript(any(), any(), any())).thenReturn(Screen.text("x"));
     Document document = new Document();
     document.setFileId("doc-id");
     document.setMimeType("audio/mpeg");
@@ -134,9 +136,9 @@ class VoiceDevBotTest {
   @Test
   void should_split_long_screen_and_put_buttons_under_last_chunk() throws TelegramApiException {
     when(useCase.handle(any()))
-        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("x")));
+        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("x"), OptionalLong.empty()));
     Screen longScreen = new Screen("so'z ".repeat(1_500).strip(), MENU_SCREEN.rows());
-    when(conversation.transcript(any(), any())).thenReturn(longScreen);
+    when(conversation.transcript(any(), any(), any())).thenReturn(longScreen);
 
     bot.consume(voiceUpdate());
 

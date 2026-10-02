@@ -10,6 +10,7 @@ import com.alex.voicedevbot.domain.AudioClip;
 import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 public class HandleVoiceMessageService implements HandleVoiceMessageUseCase {
 
@@ -40,7 +41,7 @@ public class HandleVoiceMessageService implements HandleVoiceMessageUseCase {
     AudioClip audio = audioSource.fetch(message.audio().ref());
     UserSettings speaker = hintsResolver.settingsOf(message.sender());
     Transcription transcription = speechToText.transcribe(audio, hintsResolver.resolve(speaker));
-    journal.record(speaker, message.audio(), audio, transcription);
-    return new VoiceHandlingResult.Transcribed(transcription.transcript());
+    OptionalLong journalId = journal.record(speaker, message.audio(), audio, transcription);
+    return new VoiceHandlingResult.Transcribed(transcription.transcript(), journalId);
   }
 }

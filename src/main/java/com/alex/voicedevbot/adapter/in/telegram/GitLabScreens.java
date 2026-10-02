@@ -4,6 +4,7 @@ import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
 import com.alex.voicedevbot.application.port.in.GitLabProblem;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
+import com.alex.voicedevbot.application.port.in.RepoUnavailable;
 import com.alex.voicedevbot.domain.GitLabAddress;
 import com.alex.voicedevbot.domain.GitLabNamespace;
 import com.alex.voicedevbot.domain.GitLabRepo;
@@ -11,6 +12,7 @@ import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /** GitLab ulanishlari va project repo'si ekranlari. Holatsiz, faqat ko'rinish. */
@@ -238,6 +240,35 @@ final class GitLabScreens {
         "🔗 Repo projectga ulanadi.\nAvval projectni tanlang yoki qo'shing.",
         List.of(
             List.of(new Button("📁 Projectlar", Actions.PROJECTS)), List.of(BotScreens.BACK_HOME)));
+  }
+
+  /**
+   * Tasklar va hujjatlar uchun: repo'ga murojaat qilib bo'lmadi; whitelist'dan tashqari — bo'sh.
+   */
+  static Optional<Screen> unavailable(RepoUnavailable reason) {
+    return switch (reason) {
+      case RepoUnavailable.NoActiveProject() ->
+          Optional.of(
+              new Screen(
+                  "📁 Tasklar va hujjatlar faol projectga tegishli.\nAvval projectni tanlang.",
+                  List.of(
+                      List.of(new Button("📁 Projectlar", Actions.PROJECTS)),
+                      List.of(BotScreens.BACK_HOME))));
+      case RepoUnavailable.NotLinked(var project) ->
+          Optional.of(
+              new Screen(
+                  "🔗 "
+                      + Html.bold(project.value())
+                      + " hali GitLab repo'ga ulanmagan.\nTasklar (Issue) va hujjatlar shu repo'da"
+                      + " saqlanadi.",
+                  List.of(
+                      List.of(new Button("🔗 Repo ulash", Actions.REPO)),
+                      List.of(backToCard(project)))));
+      case RepoUnavailable.NeedsNewToken(var view) -> Optional.of(needsNewToken(view));
+      case RepoUnavailable.Failed(var problem) ->
+          Optional.of(new Screen(problem(problem), List.of(List.of(BotScreens.BACK_HOME))));
+      case RepoUnavailable.AccessDenied() -> Optional.empty();
+    };
   }
 
   static Button repoButton(RepoLinkResult result) {
