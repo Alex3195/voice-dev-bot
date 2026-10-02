@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -36,6 +37,9 @@ public class TaskDialog {
 
   /** Transkriptdan olinadigan sarlavha uzunligi. */
   static final int TITLE_FROM_TEXT = 80;
+
+  /** Claude chaqirilayotganda tugma o'rnida va bildirishnomada. */
+  static final String DRAFTING = "⏳ Claude qoralama tuzmoqda…";
 
   static final String INVALID_TITLE =
       "⚠️ Sarlavha bo'sh yoki juda uzun (" + NewTask.MAX_TITLE_LENGTH + " belgigacha).";
@@ -55,11 +59,16 @@ public class TaskDialog {
    * Sarlavha kiritilgach, tavsif hali bo'lmasligi mumkin.
    *
    * @param claude qoralamani Claude tuzgan bo'lsa — uning izohlari (tahrirdan keyin ham qoladi)
+   * @param transcript qaysi transkriptdan tuzilgan (qo'lda yozilgan bo'lsa — bo'sh)
    */
-  private record Draft(String title, Optional<String> description, Optional<ClaudeNotes> claude) {
+  private record Draft(
+      String title,
+      Optional<String> description,
+      Optional<ClaudeNotes> claude,
+      OptionalLong transcript) {
 
     Draft(String title, Optional<String> description) {
-      this(title, description, Optional.empty());
+      this(title, description, Optional.empty(), OptionalLong.empty());
     }
 
     NewTask task() {
@@ -67,15 +76,20 @@ public class TaskDialog {
     }
 
     Draft withTitle(String newTitle) {
-      return new Draft(newTitle, description, claude);
+      return new Draft(newTitle, description, claude, transcript);
     }
 
     Draft withDescription(String newDescription) {
-      return new Draft(title, Optional.of(newDescription), claude);
+      return new Draft(title, Optional.of(newDescription), claude, transcript);
     }
 
     Draft withoutSuggestion(String term) {
-      return new Draft(title, description, claude.map(notes -> notes.without(term)));
+      return new Draft(title, description, claude.map(notes -> notes.without(term)), transcript);
+    }
+
+    /** Shu transkriptdan Claude allaqachon tuzgan — qayta chaqirish shart emas. */
+    boolean draftedByClaudeFrom(long journalId) {
+      return claude.isPresent() && transcript.equals(OptionalLong.of(journalId));
     }
   }
 
@@ -86,6 +100,9 @@ public class TaskDialog {
   private final ManageGlossaryUseCase glossary;
   private final Map<TelegramUserId, Awaiting> awaiting = new ConcurrentHashMap<>();
   private final Map<TelegramUserId, Draft> drafts = new ConcurrentHashMap<>();
+
+  /** Claude javobini kutayotgan foydalanuvchilar — qayta bosish ikkinchi so'rov yubormaydi. */
+  private final Map<TelegramUserId, Long> drafting = new ConcurrentHashMap<>();
 
   public TaskDialog(
       ManageTasksUseCase tasks,
@@ -102,6 +119,11 @@ public class TaskDialog {
 
   static boolean handles(String action) {
     return action.equals(Actions.TASKS) || action.startsWith(Actions.TASK_PREFIX);
+  }
+
+  /** Claude'ni chaqiradigan (bir necha soniya ishlaydigan) tugma. */
+  static boolean isSlow(String action) {
+    return action.startsWith(Actions.TASK_FROM_TRANSCRIPT);
   }
 
   boolean awaitsInput(TelegramUserId user) {
@@ -200,9 +222,23 @@ public class TaskDialog {
   /**
    * Claude bilan; u o'chiq yoki ishlamasa — oddiy qoralama (birinchi gap sarlavha). Repo ulanmagan
    * bo'lsa Claude chaqirilmaydi — avval repo ulash taklif qilinadi.
+   *
+   * <p>Tugma qayta bosilsa token sarflanmaydi: shu transkriptdan Claude tuzgan qoralama bo'lsa — u
+   * ko'rsatiladi, Claude hali ishlayotgan bo'lsa — javob yo'q.
    */
   private Optional<Screen> fromTranscript(TelegramUserId user, long journalId) {
-    return withRepo(user, linked -> draftFromTranscript(user, journalId));
+    Draft existing = drafts.get(user);
+    if (existing != null && existing.draftedByClaudeFrom(journalId)) {
+      return review(user, existing);
+    }
+    if (drafting.putIfAbsent(user, journalId) != null) {
+      return Optional.empty();
+    }
+    try {
+      return withRepo(user, linked -> draftFromTranscript(user, journalId));
+    } finally {
+      drafting.remove(user);
+    }
   }
 
   private Optional<Screen> draftFromTranscript(TelegramUserId user, long journalId) {
@@ -214,7 +250,8 @@ public class TaskDialog {
             new Draft(
                 task.title(),
                 Optional.of(task.description()),
-                Optional.of(ClaudeNotes.of(drafted))));
+                Optional.of(ClaudeNotes.of(drafted)),
+                OptionalLong.of(journalId)));
       }
       case TaskDraftResult.Failed(var problem)
           when problem == LanguageModelProblem.NOT_CONFIGURED ->
@@ -237,7 +274,13 @@ public class TaskDialog {
     }
     String text = opened.transcript().record().transcription().transcript().text();
     NewTask task = NewTask.fromText(text, TITLE_FROM_TEXT);
-    return review(user, new Draft(task.title(), Optional.of(task.description())));
+    return review(
+        user,
+        new Draft(
+            task.title(),
+            Optional.of(task.description()),
+            Optional.empty(),
+            OptionalLong.of(journalId)));
   }
 
   /** Claude taklif qilgan atama faol project lug'atiga qo'shiladi, qoralama o'zgarmaydi. */

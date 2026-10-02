@@ -9,6 +9,7 @@ import com.alex.voicedevbot.application.port.out.TranscriptionException;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.telegram.telegrambots.longpolling.util.DefaultLongPollingUpdateConsumer;
@@ -22,6 +23,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
 import org.telegram.telegrambots.meta.api.methods.send.SendVoice;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -131,25 +133,87 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
     }
   }
 
+  /**
+   * Uzoq ishlaydigan tugma (Claude) bosilishi bilan bildirishnoma chiqadi va tugma "⏳" ga almashadi
+   * — qayta bosib ikkinchi so'rov yuborib bo'lmaydi; ish tugagach tugmalar qaytadi.
+   */
   private void handleButton(CallbackQuery query) {
     TelegramUserId sender = new TelegramUserId(query.getFrom().getId());
     Long chatId = query.getMessage().getChatId();
+    Optional<String> progress = conversation.progress(query.getData());
+    Optional<InlineKeyboardMarkup> original = Optional.empty();
+    if (progress.isPresent()) {
+      answer(query.getId(), progress.get());
+      original = keyboardOf(query);
+      original.ifPresent(
+          keyboard -> setKeyboard(query, busy(keyboard, query.getData(), progress.get())));
+    }
     try {
       conversation
           .onButton(sender, query.getData())
           .ifPresentOrElse(
               reply -> {
-                answer(query.getId(), reply.toast());
+                if (progress.isEmpty()) {
+                  answer(query.getId(), reply.toast());
+                }
                 if (reply.asNewMessage()) {
                   send(chatId, reply.screen());
                 } else {
                   edit(chatId, query.getMessage().getMessageId(), reply.screen());
                 }
               },
-              () -> answer(query.getId(), ""));
+              () -> {
+                if (progress.isEmpty()) {
+                  answer(query.getId(), "");
+                }
+              });
     } catch (StorageException e) {
       log.error("Failed to handle button in chat {}", chatId, e);
       answer(query.getId(), COMMAND_FAILURE_REPLY);
+    } finally {
+      original.ifPresent(keyboard -> setKeyboard(query, keyboard));
+    }
+  }
+
+  private static Optional<InlineKeyboardMarkup> keyboardOf(CallbackQuery query) {
+    return query.getMessage() instanceof Message message
+        ? Optional.ofNullable(message.getReplyMarkup())
+        : Optional.empty();
+  }
+
+  /** Bosilgan tugma o'rnida bosilmaydigan "⏳" tugmasi; qolganlari o'zgarmaydi. */
+  private static InlineKeyboardMarkup busy(
+      InlineKeyboardMarkup keyboard, String pressed, String label) {
+    List<InlineKeyboardRow> rows =
+        keyboard.getKeyboard().stream()
+            .map(
+                row ->
+                    new InlineKeyboardRow(
+                        row.stream()
+                            .map(
+                                button ->
+                                    pressed.equals(button.getCallbackData())
+                                        ? InlineKeyboardButton.builder()
+                                            .text(label)
+                                            .callbackData(Actions.BUSY)
+                                            .build()
+                                        : button)
+                            .toList()))
+            .toList();
+    return new InlineKeyboardMarkup(rows);
+  }
+
+  private void setKeyboard(CallbackQuery query, InlineKeyboardMarkup keyboard) {
+    EditMessageReplyMarkup edit =
+        EditMessageReplyMarkup.builder()
+            .chatId(query.getMessage().getChatId())
+            .messageId(query.getMessage().getMessageId())
+            .replyMarkup(keyboard)
+            .build();
+    try {
+      telegramClient.execute(edit);
+    } catch (TelegramApiException e) {
+      log.debug("Failed to change buttons of message {}", query.getMessage().getMessageId(), e);
     }
   }
 

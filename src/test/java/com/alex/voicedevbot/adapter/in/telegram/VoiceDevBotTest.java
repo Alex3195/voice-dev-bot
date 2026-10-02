@@ -42,6 +42,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
 import org.telegram.telegrambots.meta.api.methods.send.SendVoice;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Document;
@@ -52,6 +53,8 @@ import org.telegram.telegrambots.meta.api.objects.chat.Chat;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
@@ -272,6 +275,59 @@ class VoiceDevBotTest {
     assertThat(edit.getValue().getText()).isEqualTo("🎙 menyu");
     assertThat(edit.getValue().getParseMode()).isEqualTo(ParseMode.HTML);
     assertThat(answeredCallback().getText()).isEqualTo("✅ Tayyor");
+  }
+
+  @Test
+  void should_lock_pressed_button_while_slow_action_runs_and_restore_it()
+      throws TelegramApiException {
+    // given
+    String pressed = Actions.taskFromTranscript(7);
+    Update update = buttonUpdate(pressed);
+    InlineKeyboardMarkup original =
+        new InlineKeyboardMarkup(
+            List.of(
+                new InlineKeyboardRow(
+                    InlineKeyboardButton.builder()
+                        .text("✅ Task yaratish")
+                        .callbackData(pressed)
+                        .build(),
+                    InlineKeyboardButton.builder()
+                        .text("📁 Projectlar")
+                        .callbackData("projects")
+                        .build())));
+    ((Message) update.getCallbackQuery().getMessage()).setReplyMarkup(original);
+    when(conversation.progress(pressed)).thenReturn(Optional.of("⏳ Claude qoralama tuzmoqda…"));
+    when(conversation.onButton(USER, pressed))
+        .thenReturn(Optional.of(new Reply(MENU_SCREEN, true, "e'tiborsiz")));
+
+    // when
+    bot.consume(update);
+
+    // then
+    ArgumentCaptor<EditMessageReplyMarkup> keyboards =
+        ArgumentCaptor.forClass(EditMessageReplyMarkup.class);
+    verify(telegramClient, times(2)).execute(keyboards.capture());
+    InlineKeyboardRow locked =
+        keyboards.getAllValues().getFirst().getReplyMarkup().getKeyboard().getFirst();
+    assertThat(locked.getFirst().getText()).isEqualTo("⏳ Claude qoralama tuzmoqda…");
+    assertThat(locked.getFirst().getCallbackData()).isEqualTo(Actions.BUSY);
+    assertThat(locked.get(1).getCallbackData()).isEqualTo("projects");
+    assertThat(keyboards.getAllValues().getLast().getReplyMarkup()).isEqualTo(original);
+    assertThat(keyboards.getAllValues().getLast().getMessageId()).isEqualTo(MESSAGE_ID);
+    assertThat(answeredCallback().getText()).isEqualTo("⏳ Claude qoralama tuzmoqda…");
+    assertThat(sentMessage().getText()).isEqualTo("🎙 menyu");
+  }
+
+  @Test
+  void should_answer_slow_button_once_even_without_keyboard_or_reply() throws TelegramApiException {
+    String pressed = Actions.taskFromTranscript(7);
+    when(conversation.progress(pressed)).thenReturn(Optional.of("⏳ Claude qoralama tuzmoqda…"));
+    when(conversation.onButton(USER, pressed)).thenReturn(Optional.empty());
+
+    bot.consume(buttonUpdate(pressed));
+
+    assertThat(answeredCallback().getText()).isEqualTo("⏳ Claude qoralama tuzmoqda…");
+    verify(telegramClient, never()).execute(any(EditMessageReplyMarkup.class));
   }
 
   @Test
