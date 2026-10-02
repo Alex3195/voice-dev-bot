@@ -6,14 +6,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.stt.StubSpeechToText;
 import com.alex.voicedevbot.adapter.out.stt.WhisperCppSpeechToText;
+import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
+import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
+import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
+import com.alex.voicedevbot.application.port.out.ProjectRepository;
 import com.alex.voicedevbot.application.port.out.SpeechToText;
+import com.alex.voicedevbot.support.PostgresContainer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 
 /** Smoke: Spring konteksti to'g'ri yig'iladi, Telegram'ga ulanmasdan. */
@@ -22,6 +30,22 @@ import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 class VoiceDevBotApplicationTests {
 
   @Autowired ApplicationContext context;
+
+  @DynamicPropertySource
+  static void datasource(DynamicPropertyRegistry registry) {
+    var postgres = PostgresContainer.instance();
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
+  }
+
+  @Test
+  void should_wire_command_use_cases_and_migrate_database() {
+    assertThat(context.getBean(ManageProjectsUseCase.class)).isNotNull();
+    assertThat(context.getBean(ManageGlossaryUseCase.class)).isNotNull();
+    assertThat(context.getBean(ChangeLanguageUseCase.class)).isNotNull();
+    assertThat(context.getBean(ProjectRepository.class).findAll()).isNotNull();
+  }
 
   @Test
   void should_wire_bot_and_use_case_when_context_starts() {
@@ -41,11 +65,12 @@ class VoiceDevBotApplicationTests {
 
     try (ConfigurableApplicationContext stubContext =
         app.run(
-            "--bot.token=123:test",
-            "--bot.allowed-user-ids=1",
-            "--bot.polling-enabled=false",
-            "--stt.engine=stub",
-            "--spring.config.import=")) {
+            withDatasource(
+                "--bot.token=123:test",
+                "--bot.allowed-user-ids=1",
+                "--bot.polling-enabled=false",
+                "--stt.engine=stub",
+                "--spring.config.import="))) {
       assertThat(stubContext.getBean(SpeechToText.class)).isInstanceOf(StubSpeechToText.class);
     }
   }
@@ -57,10 +82,16 @@ class VoiceDevBotApplicationTests {
     assertThatThrownBy(
             () ->
                 app.run(
-                    "--bot.token=",
-                    "--bot.allowed-user-ids=1",
-                    "--bot.polling-enabled=false",
-                    "--spring.config.import="))
+                    withDatasource(
+                        "--bot.token=",
+                        "--bot.allowed-user-ids=1",
+                        "--bot.polling-enabled=false",
+                        "--spring.config.import=")))
         .hasStackTraceContaining("bot.token");
+  }
+
+  private static String[] withDatasource(String... args) {
+    return Stream.concat(Stream.of(args), Stream.of(PostgresContainer.datasourceArgs()))
+        .toArray(String[]::new);
   }
 }

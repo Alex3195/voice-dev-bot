@@ -1,8 +1,12 @@
 package com.alex.voicedevbot.config;
 
+import com.alex.voicedevbot.adapter.in.telegram.BotConversation;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.telegram.TelegramAudioSource;
+import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
+import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
+import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.out.AudioSource;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -37,9 +41,19 @@ class TelegramConfig {
   }
 
   @Bean
+  BotConversation botConversation(
+      ManageProjectsUseCase projects,
+      ManageGlossaryUseCase glossary,
+      ChangeLanguageUseCase language) {
+    return new BotConversation(projects, glossary, language);
+  }
+
+  @Bean
   VoiceDevBot voiceDevBot(
-      HandleVoiceMessageUseCase handleVoiceMessageUseCase, TelegramClient telegramClient) {
-    return new VoiceDevBot(handleVoiceMessageUseCase, telegramClient);
+      HandleVoiceMessageUseCase handleVoiceMessageUseCase,
+      BotConversation botConversation,
+      TelegramClient telegramClient) {
+    return new VoiceDevBot(handleVoiceMessageUseCase, botConversation, telegramClient);
   }
 
   @Bean(destroyMethod = "close")
@@ -54,7 +68,10 @@ class TelegramConfig {
       TelegramBotsLongPollingApplication application,
       BotProperties properties,
       VoiceDevBot voiceDevBot) {
-    return args -> application.registerBot(properties.token(), voiceDevBot);
+    return args -> {
+      application.registerBot(properties.token(), voiceDevBot);
+      voiceDevBot.publishCommandMenu();
+    };
   }
 
   private static int portOf(URI uri) {

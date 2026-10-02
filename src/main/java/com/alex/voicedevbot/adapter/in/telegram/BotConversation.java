@@ -1,0 +1,321 @@
+package com.alex.voicedevbot.adapter.in.telegram;
+
+import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
+import com.alex.voicedevbot.application.port.in.GlossaryCommandResult;
+import com.alex.voicedevbot.application.port.in.LanguageCommandResult;
+import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
+import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
+import com.alex.voicedevbot.application.port.in.ProjectCommandResult;
+import com.alex.voicedevbot.application.port.in.ProjectCommandResult.ProjectSummary;
+import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.SpeechLanguage;
+import com.alex.voicedevbot.domain.TelegramUserId;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Foydalanuvchi bilan muloqot: buyruqlar, inline tugmalar va bot so'ragan matn (project nomi,
+ * atamalar). Har bir amal use-case orqali o'tadi — whitelist'dan tashqaridagi user hech qanday
+ * javob olmaydi ({@link Optional#empty()}).
+ *
+ * <p>Kutilayotgan kiritish xotirada: bot qayta ishga tushsa yo'qoladi, foydalanuvchi tugmani qayta
+ * bosadi.
+ */
+public class BotConversation {
+
+  /** Telegram menyusi ("/" bosilganda). */
+  static final List<BotMenuItem> MENU =
+      List.of(
+          new BotMenuItem("start", "🏠 Bosh menyu"),
+          new BotMenuItem("project", "📁 Projectlar"),
+          new BotMenuItem("glossary", "📖 Faol project lug'ati"),
+          new BotMenuItem("lang", "🌐 Nutq tili"),
+          new BotMenuItem("help", "❓ Yordam"));
+
+  static final String INVALID_INPUT = "⚠️ Noto'g'ri qiymat, qaytadan urinib ko'ring.";
+
+  enum Pending {
+    PROJECT_NAME,
+    TERMS
+  }
+
+  private final ManageProjectsUseCase projects;
+  private final ManageGlossaryUseCase glossary;
+  private final ChangeLanguageUseCase language;
+  private final Map<TelegramUserId, Pending> pending = new ConcurrentHashMap<>();
+
+  public BotConversation(
+      ManageProjectsUseCase projects,
+      ManageGlossaryUseCase glossary,
+      ChangeLanguageUseCase language) {
+    this.projects = Objects.requireNonNull(projects, "projects");
+    this.glossary = Objects.requireNonNull(glossary, "glossary");
+    this.language = Objects.requireNonNull(language, "language");
+  }
+
+  /** Matnli xabar: buyruq, bot so'ragan qiymat yoki oddiy matn (bosh menyu ko'rsatiladi). */
+  Optional<Screen> onText(TelegramUserId user, String text) {
+    Pending awaited = pending.remove(user);
+    try {
+      if (isCommand(text)) {
+        return command(user, Command.parse(text));
+      }
+      return awaited == null ? home(user) : input(user, awaited, text.strip());
+    } catch (IllegalArgumentException e) {
+      if (awaited != null) {
+        pending.put(user, awaited);
+      }
+      return Optional.of(Screen.text(INVALID_INPUT));
+    }
+  }
+
+  /** Inline tugma bosildi. */
+  Optional<Reply> onButton(TelegramUserId user, String data) {
+    pending.remove(user);
+    boolean asNewMessage = data.startsWith(Actions.NEW_MESSAGE);
+    String action = asNewMessage ? data.substring(Actions.NEW_MESSAGE.length()) : data;
+    if (action.startsWith(Actions.SELECT_PROJECT) && !action.equals(Actions.NEW_PROJECT)) {
+      return selectProjectById(user, action.substring(Actions.SELECT_PROJECT.length()));
+    }
+    if (action.startsWith(Actions.REMOVE_TERM)) {
+      return removeTermById(user, action.substring(Actions.REMOVE_TERM.length()));
+    }
+    if (action.startsWith(Actions.SET_LANGUAGE)) {
+      return changeLanguage(user, action.substring(Actions.SET_LANGUAGE.length()));
+    }
+    return screenFor(user, action).map(screen -> new Reply(screen, asNewMessage, ""));
+  }
+
+  /** Transkript ostida faol project va til; foydalanuvchi allaqachon whitelist'dan o'tgan. */
+  Screen transcript(TelegramUserId user, String text) {
+    return context(user)
+        .map(context -> BotScreens.transcript(text, context.active(), context.language()))
+        .orElseGet(() -> Screen.text("📝 <b>Matn</b>\n\n" + Html.escape(text)));
+  }
+
+  static boolean isCommand(String text) {
+    return text != null && text.startsWith("/");
+  }
+
+  private Optional<Screen> screenFor(TelegramUserId user, String action) {
+    return switch (action) {
+      case Actions.HOME, Actions.CANCEL -> home(user);
+      case Actions.HELP -> context(user).map(context -> BotScreens.help());
+      case Actions.PROJECTS -> projectsScreen(user);
+      case Actions.NEW_PROJECT -> askProjectName(user);
+      case Actions.GLOSSARY -> glossaryScreen(user, false);
+      case Actions.REMOVE_MODE -> glossaryScreen(user, true);
+      case Actions.ADD_TERMS -> askTerms(user);
+      case Actions.LANGUAGES ->
+          context(user).map(context -> BotScreens.languages(context.language()));
+      default -> Optional.empty();
+    };
+  }
+
+  private Optional<Screen> command(TelegramUserId user, Command command) {
+    String argument = command.argument();
+    return switch (command.name()) {
+      case "start" -> home(user);
+      case "help" -> screenFor(user, Actions.HELP);
+      case "project" ->
+          argument.isEmpty() ? projectsScreen(user) : selectByName(user, new ProjectName(argument));
+      case "addproject" ->
+          argument.isEmpty() ? askProjectName(user) : addProject(user, new ProjectName(argument));
+      case "glossary" -> glossaryCommand(user, Command.parse("/" + argument));
+      case "lang" ->
+          argument.isEmpty()
+              ? screenFor(user, Actions.LANGUAGES)
+              : changeLanguage(user, argument).map(Reply::screen);
+      default -> Optional.empty();
+    };
+  }
+
+  private Optional<Screen> glossaryCommand(TelegramUserId user, Command sub) {
+    List<String> terms = splitTerms(sub.argument());
+    return switch (sub.name()) {
+      case "" -> glossaryScreen(user, false);
+      case "add" -> terms.isEmpty() ? askTerms(user) : addTerms(user, terms);
+      case "remove" ->
+          terms.isEmpty()
+              ? glossaryScreen(user, true)
+              : describe(glossary.removeTerms(user, terms), false);
+      default -> throw new IllegalArgumentException("Unknown glossary action " + sub.name());
+    };
+  }
+
+  private Optional<Screen> input(TelegramUserId user, Pending awaited, String text) {
+    return switch (awaited) {
+      case PROJECT_NAME -> addProject(user, new ProjectName(text));
+      case TERMS -> addTerms(user, splitTerms(text));
+    };
+  }
+
+  private Optional<Screen> home(TelegramUserId user) {
+    return context(user).map(context -> BotScreens.home(context.active(), context.language()));
+  }
+
+  private Optional<Screen> projectsScreen(TelegramUserId user) {
+    return context(user).map(context -> BotScreens.projects(context.projects()));
+  }
+
+  private Optional<Screen> askProjectName(TelegramUserId user) {
+    return context(user)
+        .map(
+            context -> {
+              pending.put(user, Pending.PROJECT_NAME);
+              return BotScreens.askProjectName();
+            });
+  }
+
+  private Optional<Screen> addProject(TelegramUserId user, ProjectName name) {
+    return switch (projects.addProject(user, name)) {
+      case ProjectCommandResult.Added(var added) ->
+          Optional.of(
+              BotScreens.glossary(added, List.of())
+                  .withNotice("✅ Project qo'shildi va faol qilindi: " + Html.bold(added.value())));
+      case ProjectCommandResult.AlreadyExists(var existing) ->
+          projectsScreen(user)
+              .map(
+                  s ->
+                      s.withNotice("ℹ️ Bu project allaqachon bor: " + Html.bold(existing.value())));
+      default -> Optional.empty();
+    };
+  }
+
+  private Optional<Screen> selectByName(TelegramUserId user, ProjectName name) {
+    return switch (projects.selectProject(user, name)) {
+      case ProjectCommandResult.Selected(var selected) ->
+          home(user).map(s -> s.withNotice("✅ Faol project: " + Html.bold(selected.value())));
+      case ProjectCommandResult.NotFound(var missing) ->
+          projectsScreen(user)
+              .map(s -> s.withNotice("⚠️ Project topilmadi: " + Html.bold(missing.value())));
+      default -> Optional.empty();
+    };
+  }
+
+  private Optional<Reply> selectProjectById(TelegramUserId user, String id) {
+    Optional<ProjectName> name = context(user).flatMap(context -> findById(context.projects(), id));
+    if (name.isEmpty()) {
+      return projectsScreen(user).map(s -> new Reply(s, false, "Project topilmadi"));
+    }
+    projects.selectProject(user, name.get());
+    return projectsScreen(user)
+        .map(s -> new Reply(s, false, "✅ Faol project: " + name.get().value()));
+  }
+
+  private Optional<Screen> askTerms(TelegramUserId user) {
+    return switch (glossary.showGlossary(user)) {
+      case GlossaryCommandResult.Shown(var project, var terms) -> {
+        pending.put(user, Pending.TERMS);
+        yield Optional.of(BotScreens.askTerms(project));
+      }
+      case GlossaryCommandResult.NoActiveProject() -> Optional.of(BotScreens.noActiveProject());
+      case GlossaryCommandResult.AccessDenied() -> Optional.empty();
+    };
+  }
+
+  private Optional<Screen> addTerms(TelegramUserId user, List<String> terms) {
+    return describe(glossary.addTerms(user, terms), false)
+        .map(s -> s.withNotice("✅ Lug'at yangilandi"));
+  }
+
+  private Optional<Screen> glossaryScreen(TelegramUserId user, boolean removeMode) {
+    return describe(glossary.showGlossary(user), removeMode);
+  }
+
+  private Optional<Reply> removeTermById(TelegramUserId user, String id) {
+    if (!(glossary.showGlossary(user) instanceof GlossaryCommandResult.Shown shown)) {
+      return glossaryScreen(user, true).map(s -> new Reply(s, false, ""));
+    }
+    Optional<String> term =
+        shown.terms().stream()
+            .filter(t -> Actions.removeTerm(t).equals(Actions.REMOVE_TERM + id))
+            .findFirst();
+    term.ifPresent(t -> glossary.removeTerms(user, List.of(t)));
+    String toast = term.map(t -> "❌ O'chirildi: " + t).orElse("Atama topilmadi");
+    return glossaryScreen(user, true).map(s -> new Reply(s, false, toast));
+  }
+
+  private Optional<Reply> changeLanguage(TelegramUserId user, String code) {
+    return switch (language.changeLanguage(user, new SpeechLanguage(code))) {
+      case LanguageCommandResult.Changed(var changed) ->
+          Optional.of(
+              new Reply(
+                  BotScreens.languages(changed),
+                  false,
+                  "✅ Nutq tili: " + BotScreens.languageLabel(changed)));
+      default -> Optional.empty();
+    };
+  }
+
+  private static Optional<Screen> describe(GlossaryCommandResult result, boolean removeMode) {
+    return switch (result) {
+      case GlossaryCommandResult.Shown(var project, var terms) ->
+          Optional.of(
+              removeMode
+                  ? BotScreens.removeTerms(project, terms)
+                  : BotScreens.glossary(project, terms));
+      case GlossaryCommandResult.NoActiveProject() -> Optional.of(BotScreens.noActiveProject());
+      case GlossaryCommandResult.AccessDenied() -> Optional.empty();
+    };
+  }
+
+  /** Projectlar ro'yxati va til; whitelist'dan tashqarida bo'lsa — bo'sh. */
+  private Optional<Context> context(TelegramUserId user) {
+    if (!(projects.listProjects(user) instanceof ProjectCommandResult.Listed listed)) {
+      return Optional.empty();
+    }
+    if (!(language.currentLanguage(user) instanceof LanguageCommandResult.Current current)) {
+      return Optional.empty();
+    }
+    return Optional.of(new Context(listed.projects(), current.language()));
+  }
+
+  private static Optional<ProjectName> findById(List<ProjectSummary> summaries, String id) {
+    return summaries.stream()
+        .map(ProjectSummary::name)
+        .filter(name -> Actions.idOf(name.key()).equals(id))
+        .findFirst();
+  }
+
+  private static List<String> splitTerms(String text) {
+    return Arrays.stream(text.split(",")).map(String::strip).filter(t -> !t.isEmpty()).toList();
+  }
+
+  /**
+   * Tugma bosilgandagi javob.
+   *
+   * @param asNewMessage {@code true} — yangi xabar; {@code false} — bosilgan xabarni tahrirlash
+   * @param toast tugma ustida qisqa bildirishnoma; bo'sh bo'lsa ko'rsatilmaydi
+   */
+  record Reply(Screen screen, boolean asNewMessage, String toast) {}
+
+  /** Telegram menyusidagi bitta buyruq. */
+  record BotMenuItem(String command, String description) {}
+
+  private record Context(List<ProjectSummary> projects, SpeechLanguage language) {
+
+    Optional<ProjectName> active() {
+      return projects.stream().filter(ProjectSummary::active).map(ProjectSummary::name).findFirst();
+    }
+  }
+
+  /** {@code /nom@bot argument} → nom (kichik harfda, bot nomisiz) va argument. */
+  record Command(String name, String argument) {
+
+    static Command parse(String text) {
+      String body = text.strip().substring(1);
+      int space = body.indexOf(' ');
+      String head = space < 0 ? body : body.substring(0, space);
+      String argument = space < 0 ? "" : body.substring(space + 1).strip();
+      int mention = head.indexOf('@');
+      String name = mention < 0 ? head : head.substring(0, mention);
+      return new Command(name.toLowerCase(Locale.ROOT), argument);
+    }
+  }
+}

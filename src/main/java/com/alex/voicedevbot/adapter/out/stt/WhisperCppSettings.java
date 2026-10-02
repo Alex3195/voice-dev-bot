@@ -2,24 +2,19 @@ package com.alex.voicedevbot.adapter.out.stt;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * @param serverUrl whisper-server manzili
- * @param language nutq tili (Whisper kodi, masalan {@code uz})
- * @param prompt boshlang'ich matn: yozuv uslubi va atamalar lug'ati; bo'sh bo'lsa yuborilmaydi
- * @param timeout bitta voice'ni matnga aylantirish uchun maksimal vaqt
+ * @param basePrompts til kodi → shu tilning namuna matni (yozuv uslubini barqarorlashtiradi)
+ * @param timeout bitta audio'ni matnga aylantirish uchun maksimal vaqt
  */
-public record WhisperCppSettings(URI serverUrl, String language, String prompt, Duration timeout) {
+public record WhisperCppSettings(URI serverUrl, Map<String, String> basePrompts, Duration timeout) {
 
   public WhisperCppSettings {
     Objects.requireNonNull(serverUrl, "serverUrl");
-    Objects.requireNonNull(language, "language");
-    Objects.requireNonNull(prompt, "prompt");
+    basePrompts = Map.copyOf(basePrompts);
     Objects.requireNonNull(timeout, "timeout");
-  }
-
-  boolean hasPrompt() {
-    return !prompt.isBlank();
   }
 }

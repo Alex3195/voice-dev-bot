@@ -25,12 +25,19 @@ val wireMockVersion = "3.13.2"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
+	implementation("org.springframework.boot:spring-boot-starter-jdbc")
+	implementation("org.springframework.boot:spring-boot-starter-flyway")
+	implementation("org.flywaydb:flyway-database-postgresql")
+	runtimeOnly("org.postgresql:postgresql")
 	implementation("org.telegram:telegrambots-longpolling:$telegramBotsVersion")
 	implementation("org.telegram:telegrambots-client:$telegramBotsVersion")
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
+	testImplementation("org.springframework.boot:spring-boot-testcontainers")
+	testImplementation("org.testcontainers:testcontainers-postgresql")
+	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("com.tngtech.archunit:archunit-junit5:$archUnitVersion")
 	testImplementation("org.wiremock:wiremock-standalone:$wireMockVersion")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")

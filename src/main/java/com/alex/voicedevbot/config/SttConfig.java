@@ -25,8 +25,7 @@ class SttConfig {
     HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     return new WhisperCppSpeechToText(
         httpClient,
-        new WhisperCppSettings(
-            whisper.url(), whisper.language(), whisper.prompt(), whisper.timeout()));
+        new WhisperCppSettings(whisper.url(), whisper.basePrompts(), whisper.timeout()));
   }
 
   @Bean

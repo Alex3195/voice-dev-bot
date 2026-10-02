@@ -4,6 +4,7 @@ import com.alex.voicedevbot.application.port.out.SpeechToText;
 import com.alex.voicedevbot.application.port.out.TranscriptionException;
 import com.alex.voicedevbot.domain.AudioClip;
 import com.alex.voicedevbot.domain.Transcript;
+import com.alex.voicedevbot.domain.TranscriptionHints;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -39,9 +40,9 @@ public class WhisperCppSpeechToText implements SpeechToText {
   }
 
   @Override
-  public Transcript transcribe(AudioClip audio) {
+  public Transcript transcribe(AudioClip audio, TranscriptionHints hints) {
     try {
-      return new Transcript(requestTranscript(audio));
+      return new Transcript(requestTranscript(audio, hints));
     } catch (IOException e) {
       throw new TranscriptionException(failureMessage(audio), e);
     } catch (InterruptedException e) {
@@ -50,13 +51,14 @@ public class WhisperCppSpeechToText implements SpeechToText {
     }
   }
 
-  private String requestTranscript(AudioClip audio) throws IOException, InterruptedException {
+  private String requestTranscript(AudioClip audio, TranscriptionHints hints)
+      throws IOException, InterruptedException {
     String boundary = "voice-dev-bot-" + UUID.randomUUID();
     HttpRequest request =
         HttpRequest.newBuilder(inferenceUri)
             .timeout(settings.timeout())
             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-            .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(audio, boundary)))
+            .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(audio, hints, boundary)))
             .build();
     HttpResponse<String> response =
         httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -69,11 +71,13 @@ public class WhisperCppSpeechToText implements SpeechToText {
     return response.body();
   }
 
-  private byte[] multipartBody(AudioClip audio, String boundary) throws IOException {
+  private byte[] multipartBody(AudioClip audio, TranscriptionHints hints, String boundary)
+      throws IOException {
     ByteArrayOutputStream body = new ByteArrayOutputStream();
-    writeTextPart(body, boundary, "language", settings.language());
-    if (settings.hasPrompt()) {
-      writeTextPart(body, boundary, "prompt", settings.prompt());
+    writeTextPart(body, boundary, "language", hints.language().code());
+    String prompt = WhisperPrompt.build(hints, settings.basePrompts());
+    if (!prompt.isEmpty()) {
+      writeTextPart(body, boundary, "prompt", prompt);
     }
     writeTextPart(body, boundary, "response_format", RESPONSE_FORMAT);
     writeAscii(body, "--" + boundary + CRLF);

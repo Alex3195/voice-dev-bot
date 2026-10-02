@@ -32,8 +32,10 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 8. **Prod'ga faqat qo'lda tasdiq bilan** (GitHub Environments → required reviewers).
 
 ## Multi-project dizayn
-- Bot ichida `projects.yml`: `{name, repo, tracker (github|jira), stack}`.
+- Projectlar bot bazasida (PostgreSQL): `/addproject`, `/project`. Keyin `{repo, tracker (github|jira), stack}` ham shu yerga qo'shiladi.
+- Har projectning **atamalar lug'ati** bazada (`/glossary`), `.env`da emas. Faol project lug'ati Whisper prompt'iga qo'shiladi; `TaskParser` esa barcha projectlar lug'atini ko'radi va projectni o'zi aniqlaydi.
 - `/project` buyrug'i yoki ovozda project nomi aytilsa LLM ajratadi; topolmasa so'raydi.
+- Har foydalanuvchining nutq tili (`/lang`): Whisper'da qoraqalpoq tili yo'q, bunday foydalanuvchilar uchun `kk` eng yaqini.
 - Qoidalar bot kodida emas, **har project repo'sida**:
   - `CLAUDE.md`: kod uslubi, arxitektura, qilish/qilmaslik.
   - `.ai/criteria.yml`: coverage, QA, CI/CD talablari.
@@ -75,7 +77,8 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 4. Prod'ga qo'lda tasdiq bilan chiqarish
 
 ## Holat
-- 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT — `WhisperCppSpeechToText` (whisper.cpp server); `STT_ENGINE=stub` bilan Whisper'siz ishlatish mumkin.
-- Keyingi: `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
+- 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT — `WhisperCppSpeechToText` (whisper.cpp server); `STT_ENGINE=stub` bilan Whisper'siz ishlatish mumkin. Voice, audio fayl, video, video xabar qabul qilinadi (20 MB gacha).
+- Projectlar, lug'at va foydalanuvchi tili — PostgreSQL (`compose.yaml`, port 5433), Flyway, oddiy JDBC (Spring faqat `config`da). Boshqaruv inline tugmalar bilan (`BotConversation` + `BotScreens`), buyruqlar qisqa yo'l sifatida: `/start`, `/project`, `/addproject`, `/glossary`, `/lang`, `/help`.
+- Keyingi: transkripsiya jurnali (audio diskda + xom matn; keyin Claude tuzatgan va tasdiqlangan matn — lug'at takliflari, sozlamalarni o'lchash va Whisper fine-tuning dataset uchun) → `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
 - Ma'lum muammo: TelegramBots 10.3 `downloadFileAsStream` API manzilini e'tiborsiz qoldiradi va HTTP statusni tekshirmaydi — shuning uchun `TelegramAudioSource` faylni `java.net.http.HttpClient` bilan o'zi yuklaydi.
 - Claude GitHub App'iga bu private repo uchun yozish ruxsati berilmagan (push rad etilgan); kod IntelliJ/VS Code'da lokal yoziladi va o'zingiz push qilasiz yoki ruxsat berasiz.

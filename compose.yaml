@@ -1,9 +1,10 @@
-# whisper.cpp STT server (serverda). Dev'da native ishlating: scripts/whisper-dev.sh
+# Bot infratuzilmasi: PostgreSQL (har doim) + whisper.cpp STT server (profil bilan).
 #
-#   docker compose --profile gpu up -d   # Windows + NVIDIA (RTX 3060)
-#   docker compose --profile cpu up -d   # GPU'siz mashina (Apple Silicon'da amd64 emulyatsiya — sekin)
+#   docker compose up -d postgres         # dev: faqat baza (Whisper — native, scripts/whisper-dev.sh)
+#   docker compose --profile gpu up -d    # server: Windows + NVIDIA (RTX 3060) — baza + Whisper
+#   docker compose --profile cpu up -d    # GPU'siz mashina (Apple Silicon'da amd64 emulyatsiya — sekin)
 #
-# Ikkala profil ham bir xil API va portni beradi, bot uchun faqat STT_WHISPER_URL farq qiladi.
+# Whisper profillari bir xil API va portni beradi, bot uchun faqat STT_WHISPER_URL farq qiladi.
 
 x-whisper: &whisper
   restart: unless-stopped
@@ -29,6 +30,25 @@ x-whisper: &whisper
     retries: 3
 
 services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: voicedevbot
+      POSTGRES_USER: ${DB_USER:-voicedevbot}
+      # Dev default'i; serverda DB_PASSWORD albatta o'rnatilsin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-voicedevbot}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    ports:
+      # 5432 boshqa loyihalar bilan band bo'lishi mumkin
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d voicedevbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   whisper-gpu:
     <<: *whisper
     image: ghcr.io/ggml-org/whisper.cpp:main-cuda
@@ -47,3 +67,6 @@ services:
     # Rasmiy image faqat amd64; Apple Silicon'da emulyatsiya bilan ishlaydi
     platform: linux/amd64
     profiles: [cpu]
+
+volumes:
+  pgdata:

@@ -3,6 +3,11 @@ spring:
     name: voice-dev-bot
   config:
     import: optional:file:.env[.properties]
+  datasource:
+    # Dev default'lari compose.yaml'dagi lokal Postgres'ga mos; serverda DB_* environment orqali
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5433/voicedevbot}
+    username: ${DB_USER:voicedevbot}
+    password: ${DB_PASSWORD:voicedevbot}
 
 bot:
   token: ${TELEGRAM_BOT_TOKEN:}
@@ -12,9 +17,12 @@ bot:
 
 stt:
   engine: ${STT_ENGINE:whisper-cpp}
+  # /lang bilan til tanlamagan foydalanuvchi uchun
+  default-language: ${STT_DEFAULT_LANGUAGE:uz}
   whisper:
     url: ${STT_WHISPER_URL:http://127.0.0.1:8178}
-    language: ${STT_WHISPER_LANGUAGE:uz}
-    # Whisper o'zbekchada goh kirill, goh turkcha imloga o'tib ketadi — lotin namunasi buni barqarorlashtiradi
-    prompt: ${STT_WHISPER_PROMPT:Assalomu alaykum. Bu matn o'zbek tilida, lotin yozuvida yozilgan.}
     timeout: ${STT_WHISPER_TIMEOUT:15m}
+    # Til bo'yicha namuna matn. Whisper o'zbekchada goh kirill, goh turkcha imloga o'tib ketadi —
+    # lotin namunasi buni barqarorlashtiradi. Project atamalari bunga avtomatik qo'shiladi.
+    base-prompts:
+      uz: "Assalomu alaykum. Bu matn o'zbek tilida, lotin yozuvida yozilgan."

@@ -10,8 +10,26 @@ To'liq g'oya va bosqichlar: [CLAUDE.md](CLAUDE.md).
 - Whitelist'dagi Telegram user'dan audio qabul qilinadi, boshqalar e'tiborsiz qoldiriladi:
   voice, audio fayl (mp3, m4a...), video, video xabar, audio/video hujjat. Limit — 20 MB (oddiy Bot API).
 - Uzun matn 4096 belgilik bir nechta xabarga bo'linadi. Audio'lar navbat bilan qayta ishlanadi.
-- Audio Telegram'dan yuklanadi va whisper.cpp server orqali o'zbekcha matnga aylantiriladi.
+- Audio Telegram'dan yuklanadi va whisper.cpp server orqali matnga aylantiriladi.
 - Bot natija matnini qaytaradi.
+- Projectlar va atamalar lug'ati (PostgreSQL): faol project lug'ati Whisper'ga beriladi — xususiy nomlar
+  (ELT imzo, Klaes, PVX) to'g'ri yoziladi.
+- Har foydalanuvchining nutq tili (`/lang`): masalan, qoraqalpoqcha gapiradigan uchun `kk`.
+
+### Boshqaruv — tugmalar bilan
+
+`/start` bosh menyuni ochadi: **📁 Projectlar · 📖 Lug'at · 🌐 Til · ❓ Yordam**. Tugma bosilganda o'sha
+xabar o'zi yangilanadi (chat to'lib ketmaydi).
+
+- **📁 Projectlar** — project'ni bosib faol qilasiz (✅), **➕ Yangi project** — nomini yozasiz.
+- **📖 Lug'at** — **➕ Qo'shish** (atamalarni vergul bilan yozasiz), **➖ O'chirish** (❌ atamani bosasiz).
+- **🌐 Til** — 🇺🇿 O'zbek, 🇰🇿 Qozoq / Qoraqalpoq, 🇷🇺 Rus, 🇬🇧 Ingliz, 🇹🇷 Turk.
+- Har transkript ostida faol project va til ko'rinadi, **📁 Projectni almashtirish** tugmasi bilan.
+
+Buyruqlar ham ishlaydi (Telegram "Menu"da ko'rinadi): `/start`, `/project [nom]`, `/addproject [nom]`,
+`/glossary [add|remove a, b]`, `/lang [kod]`, `/help`.
+
+Whitelist'dan tashqaridagi user'ga bot hech qanday buyruq yoki tugmaga javob bermaydi.
 
 ## Talablar
 
@@ -19,12 +37,14 @@ To'liq g'oya va bosqichlar: [CLAUDE.md](CLAUDE.md).
 - Telegram bot tokeni ([@BotFather](https://t.me/BotFather))
 - O'z Telegram user ID'ingiz ([@userinfobot](https://t.me/userinfobot))
 - Whisper: dev'da `brew install whisper-cpp ffmpeg`, serverda Docker (+ NVIDIA Container Toolkit)
+- Docker — PostgreSQL uchun (va testlar uchun: Testcontainers)
 
 ## Ishga tushirish
 
 ```bash
-cp .env.example .env    # token va user ID'ni yozing
-scripts/whisper-dev.sh  # alohida terminalda: native Whisper (dev)
+cp .env.example .env              # token va user ID'ni yozing
+docker compose up -d postgres     # baza (localhost:5433), migratsiyalar bot ishga tushganda
+scripts/whisper-dev.sh            # alohida terminalda: native Whisper (dev)
 ./gradlew bootRun
 ```
 
@@ -64,8 +84,9 @@ Spring `.env` faylni avtomatik o'qiydi (`spring.config.import`); serverda oddiy 
 | `BOT_POLLING_ENABLED` | `false` — Telegram'ga ulanmaslik | `true` |
 | `STT_ENGINE` | `whisper-cpp` yoki `stub` (Whisper'siz) | `whisper-cpp` |
 | `STT_WHISPER_URL` | whisper-server manzili | `http://127.0.0.1:8178` |
-| `STT_WHISPER_LANGUAGE` | Nutq tili | `uz` |
-| `STT_WHISPER_PROMPT` | Whisper'ga yuboriladigan umumiy prompt | o'zbekcha lotin namuna gap |
+| `STT_DEFAULT_LANGUAGE` | `/lang` tanlamagan foydalanuvchi tili | `uz` |
+| `DB_URL` | PostgreSQL JDBC manzili | `jdbc:postgresql://127.0.0.1:5433/voicedevbot` |
+| `DB_USER` / `DB_PASSWORD` | Baza foydalanuvchisi (serverda parolni albatta o'zgartiring) | `voicedevbot` |
 | `STT_WHISPER_TIMEOUT` | Bitta audio uchun maksimal vaqt | `15m` |
 
 Majburiy sozlama bo'lmasa ilova ishga tushmaydi. `.env` commit qilinmaydi.
@@ -85,7 +106,7 @@ src/main/java/com/alex/voicedevbot/
 ## Development
 
 ```bash
-./gradlew check            # format + testlar + ArchUnit + coverage ≥ 80%
+./gradlew check            # format + testlar + ArchUnit + coverage ≥ 80% (Docker kerak: Testcontainers)
 ./gradlew spotlessApply    # formatlash
 ```
 
