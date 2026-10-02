@@ -12,6 +12,10 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 | --- | --- |
 | #1, #2 | whisper.cpp STT (dev: native, server: Docker GPU/CPU), large-v3 + beam 5 + lotin prompt; voice, audio fayl, video, video xabar, audio/video hujjat (20 MB) |
 | #3 | Projectlar, lug'at, foydalanuvchi tili (PostgreSQL + Flyway, oddiy JDBC); inline tugmali interfeys (`BotConversation` + `BotScreens`), `/` menyu |
+| #5 | Transkripsiya jurnali + audio arxivi, project kartochkasi, ⚙️ Sozlamalar (PR B) |
+
+Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
+D esa ovozdan task yaratishni qo'shadi.
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -52,6 +56,17 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 - [ ] Project ↔ repo: project qo'shishda `📂 Mavjud repo'ni tanlash` (qidiruv bilan) / `➕ Yangi repo yaratish`
       (`CLAUDE.md`, `.ai/criteria.yml`, `.ai/task-template.md` shablonlari bilan;
       `Alex3195/ai-agent-workflow` asos bo'la oladi) / `⏭ Keyinroq`.
+
+## PR E — Tasklar va Hujjatlar bo'limlari
+
+- [ ] **✅ Tasklar** (project kartochkasida): project repo'sidagi GitLab Issue'lar, sahifalab. Holat GitLab'dagi
+      haqiqiy holatdan: 🟢 ochiq · 🔀 MR ochilgan · ✅ MR merge bo'lgan · ⚪ yopiq.
+- [ ] `➕ Yangi task` — sarlavha + tavsif (matn bilan), tasdiqdan keyin Issue (`ai-task` label). Transkript
+      ostida `✅ Task yaratish` (PR D'gacha — xom matn bilan, PR D'dan keyin Claude bilan).
+- [ ] Task ichida: tavsif, MR havolasi, `✔️ Yopish` / `↩️ Qayta ochish`.
+- [ ] **📄 Hujjatlar** — project repo'sidan o'qiladi (botda nusxa yo'q, repo yagona manba). Standart tuzilma:
+      `docs/roadmap.md`, `docs/decisions/NNN-*.md` (qarorlar, ADR), `docs/specs/NNN-*.md` (TZ/spetsifikatsiya),
+      `CLAUDE.md`. Uzun hujjat bo'laklab ko'rsatiladi.
 
 ## PR D — Claude TaskParser
 
