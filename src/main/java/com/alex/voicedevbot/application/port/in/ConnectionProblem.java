@@ -1,7 +1,7 @@
 package com.alex.voicedevbot.application.port.in;
 
 /** GitLab amali nima uchun bajarilmadi — foydalanuvchiga tushunarli sabab. */
-public enum GitLabProblem {
+public enum ConnectionProblem {
   INVALID_ADDRESS,
   INVALID_TOKEN_FORMAT,
   /** GitLab tokenni tanimadi (noto'g'ri, bekor qilingan). */

@@ -5,9 +5,9 @@ package com.alex.voicedevbot.domain;
  *
  * @param path masalan {@code alex} yoki {@code akfa/backend}
  */
-public record GitLabNamespace(long id, String path, boolean personal) {
+public record Namespace(long id, String path, boolean personal) {
 
-  public GitLabNamespace {
+  public Namespace {
     if (path == null || path.isBlank()) {
       throw new IllegalArgumentException("Namespace path must not be blank");
     }

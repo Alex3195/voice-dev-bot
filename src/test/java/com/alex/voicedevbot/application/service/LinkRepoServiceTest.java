@@ -13,22 +13,22 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
+import com.alex.voicedevbot.application.port.out.CodeHost;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
@@ -51,10 +51,9 @@ class LinkRepoServiceTest {
 
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHost api = mock(CodeHost.class);
   private final LinkRepoService service =
       new LinkRepoService(
           new AccessPolicy(Set.of(USER)),
@@ -66,14 +65,14 @@ class LinkRepoServiceTest {
           Clock.fixed(
               GitLabFixtures.TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   @BeforeEach
   void activeProjectAndConnection() {
     new InMemoryProjectRepository().save(Project.named(ELT_IMZO));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
   }
 
   @Test
@@ -123,19 +122,19 @@ class LinkRepoServiceTest {
   @ValueSource(strings = {"", "  ", "bad/name", "emoji 🚀"})
   void should_reject_invalid_repo_name_without_calling_gitlab(String name) {
     assertThat(service.create(USER, connection.id(), PERSONAL.id(), name))
-        .isEqualTo(new RepoLinkResult.Failed(GitLabProblem.INVALID_REPO_NAME));
+        .isEqualTo(new RepoLinkResult.Failed(ConnectionProblem.INVALID_REPO_NAME));
     verifyNoInteractions(api);
   }
 
   @Test
   void should_ask_for_new_token_when_it_is_expired_or_rejected() {
-    GitLabConnection expired =
+    ProviderConnection expired =
         connections.save(
-            GitLabAddress.parse("git.example.uz"),
+            ServerAddress.parse("git.example.uz"),
             TOKEN,
             GitLabFixtures.expiringOn(GitLabFixtures.TODAY));
     when(api.searchRepos(connection, ""))
-        .thenThrow(new GitLabException(Reason.UNAUTHORIZED, "x", null));
+        .thenThrow(new IntegrationException(Reason.UNAUTHORIZED, "x", null));
 
     assertThat(service.search(USER, expired.id(), ""))
         .isInstanceOf(RepoLinkResult.NeedsNewToken.class);
@@ -147,12 +146,12 @@ class LinkRepoServiceTest {
   @Test
   void should_report_gitlab_failures_and_missing_connection() {
     when(api.createRepo(any(), anyLong(), anyString(), any()))
-        .thenThrow(new GitLabException(Reason.CONFLICT, "taken", null));
+        .thenThrow(new IntegrationException(Reason.CONFLICT, "taken", null));
 
     assertThat(service.create(USER, connection.id(), PERSONAL.id(), "elt-imzo"))
-        .isEqualTo(new RepoLinkResult.Failed(GitLabProblem.REPO_EXISTS));
+        .isEqualTo(new RepoLinkResult.Failed(ConnectionProblem.REPO_EXISTS));
     assertThat(service.link(USER, 99, REPO.id()))
-        .isEqualTo(new RepoLinkResult.Failed(GitLabProblem.NOT_FOUND));
+        .isEqualTo(new RepoLinkResult.Failed(ConnectionProblem.NOT_FOUND));
     assertThat(links.find(ELT_IMZO)).isEmpty();
   }
 

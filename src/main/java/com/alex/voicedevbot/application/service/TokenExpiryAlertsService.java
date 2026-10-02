@@ -2,7 +2,7 @@ package com.alex.voicedevbot.application.service;
 
 import com.alex.voicedevbot.application.port.in.ConnectionView;
 import com.alex.voicedevbot.application.port.in.TokenExpiryAlertsUseCase;
-import com.alex.voicedevbot.application.port.out.GitLabConnectionRepository;
+import com.alex.voicedevbot.application.port.out.ConnectionRepository;
 import com.alex.voicedevbot.domain.TokenStatus;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -11,10 +11,10 @@ import java.util.Objects;
 
 public class TokenExpiryAlertsService implements TokenExpiryAlertsUseCase {
 
-  private final GitLabConnectionRepository connections;
+  private final ConnectionRepository connections;
   private final Clock clock;
 
-  public TokenExpiryAlertsService(GitLabConnectionRepository connections, Clock clock) {
+  public TokenExpiryAlertsService(ConnectionRepository connections, Clock clock) {
     this.connections = Objects.requireNonNull(connections, "connections");
     this.clock = Objects.requireNonNull(clock, "clock");
   }

@@ -9,11 +9,11 @@ import java.util.Objects;
  * GitLab server manzili: {@code https://gitlab.com} yoki self-hosted (yo'l bilan ham bo'lishi
  * mumkin, masalan {@code http://10.0.0.5/gitlab}). Oxiridagi {@code /} olib tashlanadi.
  */
-public record GitLabAddress(URI uri) {
+public record ServerAddress(URI uri) {
 
-  public static final GitLabAddress GITLAB_COM = parse("https://gitlab.com");
+  public static final ServerAddress GITLAB_COM = parse("https://gitlab.com");
 
-  public GitLabAddress {
+  public ServerAddress {
     Objects.requireNonNull(uri, "uri");
     String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
     if (!scheme.equals("https") && !scheme.equals("http")) {
@@ -25,7 +25,7 @@ public record GitLabAddress(URI uri) {
   }
 
   /** Foydalanuvchi yozgan matn: sxemasiz bo'lsa {@code https://} qo'shiladi. */
-  public static GitLabAddress parse(String text) {
+  public static ServerAddress parse(String text) {
     if (text == null || text.isBlank()) {
       throw new IllegalArgumentException("GitLab address must not be blank");
     }
@@ -35,7 +35,7 @@ public record GitLabAddress(URI uri) {
       withScheme = withScheme.substring(0, withScheme.length() - 1);
     }
     try {
-      return new GitLabAddress(new URI(withScheme));
+      return new ServerAddress(new URI(withScheme));
     } catch (URISyntaxException e) {
       throw new IllegalArgumentException("GitLab address is not a valid URL", e);
     }

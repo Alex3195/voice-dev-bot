@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
+import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
-import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
@@ -28,7 +28,7 @@ import com.alex.voicedevbot.domain.Transcript;
 import com.alex.voicedevbot.domain.TranscriptRecord;
 import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
@@ -56,10 +56,9 @@ class BotConversationTest {
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
   private final InMemoryTranscriptionLog transcriptLog = new InMemoryTranscriptionLog();
-  private final InMemoryGitLabConnectionRepository gitLabConnections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository gitLabConnections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks repoLinks = new InMemoryProjectRepoLinks();
-  private final GitLabApi gitLabApi = Mockito.mock(GitLabApi.class);
+  private final CodeHost gitLabApi = Mockito.mock(CodeHost.class);
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-02T09:00:00Z"), ZoneOffset.UTC);
   private final BotConversation conversation = conversation();
 
@@ -84,8 +83,8 @@ class BotConversationTest {
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         transcripts,
-        new GitLabDialog(
-            new ManageGitLabService(access, gitLabConnections, gitLabApi, clock), repos),
+        new ConnectionsDialog(
+            new ManageConnectionsService(access, gitLabConnections, gitLabApi, clock), repos),
         new TaskDialog(new ManageTasksService(repoAccess, gitLabApi), repos, transcripts),
         new DocsDialog(new BrowseDocsService(repoAccess, gitLabApi)),
         ZoneOffset.UTC);

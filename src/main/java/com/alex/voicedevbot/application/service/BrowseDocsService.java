@@ -1,10 +1,10 @@
 package com.alex.voicedevbot.application.service;
 
 import com.alex.voicedevbot.application.port.in.BrowseDocsUseCase;
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.DocsResult;
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
+import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,9 +22,9 @@ public class BrowseDocsService implements BrowseDocsUseCase {
       List.of("CLAUDE.md", "README.md", "docs/roadmap.md", "docs/decisions/", "docs/specs/");
 
   private final ProjectRepoAccess access;
-  private final GitLabApi gitLab;
+  private final CodeHost gitLab;
 
-  public BrowseDocsService(ProjectRepoAccess access, GitLabApi gitLab) {
+  public BrowseDocsService(ProjectRepoAccess access, CodeHost gitLab) {
     this.access = Objects.requireNonNull(access, "access");
     this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
   }
@@ -56,12 +56,12 @@ public class BrowseDocsService implements BrowseDocsUseCase {
         user,
         repo -> {
           if (!isDocument(path)) {
-            return new RepoUnavailable.Failed(GitLabProblem.NOT_FOUND);
+            return new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND);
           }
           return gitLab
               .readFile(repo.connection(), repo.repoId(), path)
               .<DocsResult>map(content -> new DocsResult.Opened(repo.project(), path, content))
-              .orElseGet(() -> new RepoUnavailable.Failed(GitLabProblem.NOT_FOUND));
+              .orElseGet(() -> new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));
         });
   }
 

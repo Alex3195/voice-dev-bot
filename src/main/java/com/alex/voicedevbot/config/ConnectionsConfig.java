@@ -3,21 +3,21 @@ package com.alex.voicedevbot.config;
 import com.alex.voicedevbot.adapter.in.telegram.TokenExpiryNotifier;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.gitlab.GitLabHttpApi;
-import com.alex.voicedevbot.adapter.out.persistence.JdbcGitLabConnectionRepository;
+import com.alex.voicedevbot.adapter.out.persistence.JdbcConnectionRepository;
 import com.alex.voicedevbot.adapter.out.persistence.JdbcProjectRepoLinks;
 import com.alex.voicedevbot.adapter.out.persistence.TokenCipher;
 import com.alex.voicedevbot.adapter.out.template.ClasspathRepoTemplate;
 import com.alex.voicedevbot.application.port.in.BrowseDocsUseCase;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
-import com.alex.voicedevbot.application.port.in.ManageGitLabUseCase;
+import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TokenExpiryAlertsUseCase;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabConnectionRepository;
+import com.alex.voicedevbot.application.port.out.CodeHost;
+import com.alex.voicedevbot.application.port.out.ConnectionRepository;
 import com.alex.voicedevbot.application.port.out.ProjectRepoLinks;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
-import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
 import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.TokenExpiryAlertsService;
@@ -41,7 +41,7 @@ import org.springframework.context.annotation.Configuration;
 /** GitLab ulanishlari, project ↔ repo, tasklar, hujjatlar va tokenlar muddatini kuzatish. */
 @Configuration
 @EnableConfigurationProperties(SecretsProperties.class)
-class GitLabConfig {
+class ConnectionsConfig {
 
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
@@ -60,8 +60,8 @@ class GitLabConfig {
   }
 
   @Bean
-  GitLabConnectionRepository gitLabConnectionRepository(DataSource dataSource, TokenCipher cipher) {
-    return new JdbcGitLabConnectionRepository(dataSource, cipher);
+  ConnectionRepository gitLabConnectionRepository(DataSource dataSource, TokenCipher cipher) {
+    return new JdbcConnectionRepository(dataSource, cipher);
   }
 
   @Bean
@@ -70,7 +70,7 @@ class GitLabConfig {
   }
 
   @Bean
-  GitLabApi gitLabApi() {
+  CodeHost gitLabApi() {
     HttpClient httpClient =
         HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
@@ -80,21 +80,18 @@ class GitLabConfig {
   }
 
   @Bean
-  ManageGitLabUseCase manageGitLabUseCase(
-      AccessPolicy accessPolicy,
-      GitLabConnectionRepository connections,
-      GitLabApi api,
-      Clock clock) {
-    return new ManageGitLabService(accessPolicy, connections, api, clock);
+  ManageConnectionsUseCase manageGitLabUseCase(
+      AccessPolicy accessPolicy, ConnectionRepository connections, CodeHost api, Clock clock) {
+    return new ManageConnectionsService(accessPolicy, connections, api, clock);
   }
 
   @Bean
   LinkRepoUseCase linkRepoUseCase(
       AccessPolicy accessPolicy,
       UserSettingsLookup settings,
-      GitLabConnectionRepository connections,
+      ConnectionRepository connections,
       ProjectRepoLinks links,
-      GitLabApi api,
+      CodeHost api,
       Clock clock) {
     return new LinkRepoService(
         accessPolicy, settings, connections, links, api, new ClasspathRepoTemplate(), clock);
@@ -104,25 +101,24 @@ class GitLabConfig {
   ProjectRepoAccess projectRepoAccess(
       AccessPolicy accessPolicy,
       UserSettingsLookup settings,
-      GitLabConnectionRepository connections,
+      ConnectionRepository connections,
       ProjectRepoLinks links,
       Clock clock) {
     return new ProjectRepoAccess(accessPolicy, settings, connections, links, clock);
   }
 
   @Bean
-  ManageTasksUseCase manageTasksUseCase(ProjectRepoAccess access, GitLabApi api) {
+  ManageTasksUseCase manageTasksUseCase(ProjectRepoAccess access, CodeHost api) {
     return new ManageTasksService(access, api);
   }
 
   @Bean
-  BrowseDocsUseCase browseDocsUseCase(ProjectRepoAccess access, GitLabApi api) {
+  BrowseDocsUseCase browseDocsUseCase(ProjectRepoAccess access, CodeHost api) {
     return new BrowseDocsService(access, api);
   }
 
   @Bean
-  TokenExpiryAlertsUseCase tokenExpiryAlertsUseCase(
-      GitLabConnectionRepository connections, Clock clock) {
+  TokenExpiryAlertsUseCase tokenExpiryAlertsUseCase(ConnectionRepository connections, Clock clock) {
     return new TokenExpiryAlertsService(connections, clock);
   }
 

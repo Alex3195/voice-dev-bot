@@ -61,7 +61,7 @@ public class DocsDialog {
     return switch (result) {
       case DocsResult.Listed listed -> Optional.of(DocScreens.list(listed));
       case DocsResult.Opened opened -> Optional.of(DocScreens.page(opened, 0));
-      case RepoUnavailable unavailable -> GitLabScreens.unavailable(unavailable);
+      case RepoUnavailable unavailable -> ConnectionScreens.unavailable(unavailable);
     };
   }
 }

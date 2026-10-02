@@ -4,9 +4,10 @@ import java.time.LocalDate;
 import java.util.Objects;
 
 /** Saqlangan GitLab ulanishi: server, token va token haqida GitLab aytgan ma'lumot. */
-public record GitLabConnection(long id, GitLabAddress address, GitLabToken token, TokenInfo info) {
+public record ProviderConnection(
+    long id, ServerAddress address, AccessToken token, TokenInfo info) {
 
-  public GitLabConnection {
+  public ProviderConnection {
     Objects.requireNonNull(address, "address");
     Objects.requireNonNull(token, "token");
     Objects.requireNonNull(info, "info");

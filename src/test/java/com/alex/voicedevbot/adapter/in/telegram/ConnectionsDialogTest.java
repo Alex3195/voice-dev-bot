@@ -11,27 +11,27 @@ import static org.mockito.Mockito.when;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
+import com.alex.voicedevbot.application.port.out.CodeHost;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
-import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
 import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
@@ -46,7 +46,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** GitLab ulanishlari va repo bog'lash oqimlari — haqiqiy use-case'lar, soxta GitLab API. */
-class GitLabDialogTest {
+class ConnectionsDialogTest {
 
   private static final TelegramUserId USER = new TelegramUserId(1L);
   private static final TelegramUserId STRANGER = new TelegramUserId(2L);
@@ -55,10 +55,9 @@ class GitLabDialogTest {
   private final InMemoryProjectRepository projects = new InMemoryProjectRepository();
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHost api = mock(CodeHost.class);
   private final BotConversation conversation = conversation();
 
   private BotConversation conversation() {
@@ -85,7 +84,7 @@ class GitLabDialogTest {
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         transcripts,
-        new GitLabDialog(new ManageGitLabService(access, connections, api, clock), repos),
+        new ConnectionsDialog(new ManageConnectionsService(access, connections, api, clock), repos),
         new TaskDialog(new ManageTasksService(repoAccess, api), repos, transcripts),
         new DocsDialog(new BrowseDocsService(repoAccess, api)),
         ZoneOffset.UTC);
@@ -107,14 +106,14 @@ class GitLabDialogTest {
     return screen.rows().stream().flatMap(List::stream).map(Button::label).toList();
   }
 
-  private GitLabConnection connectGitLabCom() {
-    return connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+  private ProviderConnection connectGitLabCom() {
+    return connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
   }
 
   @Test
   void should_connect_gitlab_com_with_token_and_ask_to_delete_token_message() {
     // given
-    when(api.verify(GitLabAddress.GITLAB_COM, TOKEN)).thenReturn(VALID);
+    when(api.verify(ServerAddress.GITLAB_COM, TOKEN)).thenReturn(VALID);
     Screen empty = press(Actions.GITLAB).screen();
     press(Actions.GITLAB_ADD);
 
@@ -152,7 +151,8 @@ class GitLabDialogTest {
 
   @Test
   void should_explain_rejected_token() {
-    when(api.verify(any(), any())).thenThrow(new GitLabException(Reason.UNAUTHORIZED, "x", null));
+    when(api.verify(any(), any()))
+        .thenThrow(new IntegrationException(Reason.UNAUTHORIZED, "x", null));
     press(Actions.GITLAB_COM);
 
     Screen rejected = text(TOKEN.value());
@@ -163,7 +163,7 @@ class GitLabDialogTest {
 
   @Test
   void should_show_renew_and_remove_connection() {
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
     when(api.verify(any(), any())).thenReturn(VALID);
 
     Screen detail = press(Actions.GITLAB_SHOW + connection.id()).screen();
@@ -187,7 +187,7 @@ class GitLabDialogTest {
   @Test
   void should_link_existing_repo_from_project_card() {
     // given
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
     text("/addproject ELT imzo");
     when(api.searchRepos(connection, "")).thenReturn(List.of());
     when(api.searchRepos(connection, "elt")).thenReturn(List.of(REPO));
@@ -213,7 +213,7 @@ class GitLabDialogTest {
 
   @Test
   void should_create_repo_in_chosen_namespace() {
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
     text("/addproject ELT imzo");
     when(api.namespaces(connection)).thenReturn(List.of(PERSONAL));
     when(api.createRepo(connection, PERSONAL.id(), "elt-imzo", Map.of("CLAUDE.md", "# ELT imzo")))
@@ -230,10 +230,10 @@ class GitLabDialogTest {
 
   @Test
   void should_show_problem_when_repo_name_is_taken() {
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
     text("/addproject ELT imzo");
     when(api.createRepo(any(), org.mockito.ArgumentMatchers.anyLong(), any(), any()))
-        .thenThrow(new GitLabException(Reason.CONFLICT, "taken", null));
+        .thenThrow(new IntegrationException(Reason.CONFLICT, "taken", null));
     press(Actions.REPO_NAMESPACE + connection.id() + ":" + PERSONAL.id());
 
     Screen failed = text("elt-imzo");
@@ -244,10 +244,10 @@ class GitLabDialogTest {
 
   @Test
   void should_offer_token_renewal_when_gitlab_rejects_it_during_repo_search() {
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
     text("/addproject ELT imzo");
     when(api.searchRepos(any(), any()))
-        .thenThrow(new GitLabException(Reason.UNAUTHORIZED, "x", null));
+        .thenThrow(new IntegrationException(Reason.UNAUTHORIZED, "x", null));
 
     Screen screen = press(Actions.REPO_PICK + connection.id()).screen();
 
@@ -257,7 +257,7 @@ class GitLabDialogTest {
 
   @Test
   void should_switch_and_unlink_repo() {
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
     text("/addproject ELT imzo");
     when(api.findRepo(connection, REPO.id())).thenReturn(REPO);
     press(Actions.REPO_LINK + connection.id() + ":" + REPO.id());
@@ -306,7 +306,7 @@ class GitLabDialogTest {
 
   @Test
   void should_never_answer_stranger() {
-    GitLabConnection connection = connectGitLabCom();
+    ProviderConnection connection = connectGitLabCom();
 
     for (String action :
         List.of(

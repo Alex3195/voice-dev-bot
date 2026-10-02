@@ -4,10 +4,10 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.alex.voicedevbot.application.port.in.ConnectionView;
-import com.alex.voicedevbot.domain.GitLabAddress;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenStatus;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Test;
 
 class TokenExpiryAlertsServiceTest {
 
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
 
   private TokenExpiryAlertsService serviceOn(LocalDate day) {
     return new TokenExpiryAlertsService(
@@ -25,11 +24,11 @@ class TokenExpiryAlertsServiceTest {
 
   @Test
   void should_alert_expiring_and_expired_tokens_once_per_day() {
-    connections.save(GitLabAddress.parse("a.uz"), TOKEN, GitLabFixtures.VALID);
+    connections.save(ServerAddress.parse("a.uz"), TOKEN, GitLabFixtures.VALID);
     connections.save(
-        GitLabAddress.parse("b.uz"), TOKEN, GitLabFixtures.expiringOn(LocalDate.of(2026, 10, 5)));
+        ServerAddress.parse("b.uz"), TOKEN, GitLabFixtures.expiringOn(LocalDate.of(2026, 10, 5)));
     connections.save(
-        GitLabAddress.parse("c.uz"), TOKEN, GitLabFixtures.expiringOn(LocalDate.of(2026, 9, 1)));
+        ServerAddress.parse("c.uz"), TOKEN, GitLabFixtures.expiringOn(LocalDate.of(2026, 9, 1)));
 
     var first = serviceOn(GitLabFixtures.TODAY).dueAlerts();
     var sameDay = serviceOn(GitLabFixtures.TODAY).dueAlerts();

@@ -10,8 +10,8 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
 import com.alex.voicedevbot.application.port.in.TokenExpiryAlertsUseCase;
 import com.alex.voicedevbot.application.port.out.StorageException;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.TokenStatus;
 import com.alex.voicedevbot.support.GitLabFixtures;
@@ -33,10 +33,10 @@ class TokenExpiryNotifierTest {
 
   @Test
   void should_send_renewal_alert_to_every_whitelisted_user() {
-    GitLabConnection connection =
-        new GitLabConnection(
+    ProviderConnection connection =
+        new ProviderConnection(
             5,
-            GitLabAddress.GITLAB_COM,
+            ServerAddress.GITLAB_COM,
             GitLabFixtures.TOKEN,
             GitLabFixtures.expiringOn(LocalDate.of(2026, 10, 5)));
     when(alerts.dueAlerts())

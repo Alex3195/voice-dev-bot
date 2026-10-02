@@ -12,27 +12,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
 import com.alex.voicedevbot.application.port.in.TasksResult;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
-import com.alex.voicedevbot.application.port.out.GitLabException;
-import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
+import com.alex.voicedevbot.application.port.out.CodeHost;
+import com.alex.voicedevbot.application.port.out.IntegrationException;
+import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
 import java.net.URI;
@@ -56,10 +56,9 @@ class ManageTasksServiceTest {
 
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHost api = mock(CodeHost.class);
   private final ManageTasksService service =
       new ManageTasksService(
           new ProjectRepoAccess(
@@ -70,13 +69,13 @@ class ManageTasksServiceTest {
               Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)),
           api);
 
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   @BeforeEach
   void linkedProject() {
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 
@@ -229,7 +228,7 @@ class ManageTasksServiceTest {
   @Test
   void should_ask_for_new_token_without_calling_gitlab_when_token_expired() {
     connections.save(
-        GitLabAddress.GITLAB_COM, TOKEN, GitLabFixtures.expiringOn(TODAY.minusDays(1)));
+        ServerAddress.GITLAB_COM, TOKEN, GitLabFixtures.expiringOn(TODAY.minusDays(1)));
 
     assertThat(service.overview(USER)).isInstanceOf(RepoUnavailable.NeedsNewToken.class);
     verifyNoInteractions(api);
@@ -238,7 +237,7 @@ class ManageTasksServiceTest {
   @Test
   void should_ask_for_new_token_when_gitlab_rejects_it() {
     when(api.issues(any(), anyLong(), anyInt()))
-        .thenThrow(new GitLabException(Reason.UNAUTHORIZED, "GET issues returned 401", null));
+        .thenThrow(new IntegrationException(Reason.UNAUTHORIZED, "GET issues returned 401", null));
 
     assertThat(service.overview(USER)).isInstanceOf(RepoUnavailable.NeedsNewToken.class);
   }
@@ -246,10 +245,10 @@ class ManageTasksServiceTest {
   @Test
   void should_report_gitlab_failure() {
     when(api.issue(any(), anyLong(), anyLong()))
-        .thenThrow(new GitLabException(Reason.NOT_FOUND, "GET issue returned 404", null));
+        .thenThrow(new IntegrationException(Reason.NOT_FOUND, "GET issue returned 404", null));
 
     assertThat(service.open(USER, 99))
-        .isEqualTo(new RepoUnavailable.Failed(GitLabProblem.NOT_FOUND));
+        .isEqualTo(new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));
   }
 
   @Test

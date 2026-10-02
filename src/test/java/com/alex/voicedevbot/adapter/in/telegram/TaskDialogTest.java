@@ -14,12 +14,12 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
+import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
-import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
 import com.alex.voicedevbot.application.service.ManageTasksService;
@@ -28,13 +28,13 @@ import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SourceAudio;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.Task;
@@ -45,7 +45,7 @@ import com.alex.voicedevbot.domain.TranscriptRecord;
 import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
@@ -76,13 +76,12 @@ class TaskDialogTest {
   private final InMemoryProjectRepository projects = new InMemoryProjectRepository();
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
   private final InMemoryTranscriptionLog transcriptLog = new InMemoryTranscriptionLog();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHost api = mock(CodeHost.class);
   private final BotConversation conversation = conversation();
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   private BotConversation conversation() {
     AccessPolicy access = new AccessPolicy(Set.of(USER));
@@ -99,7 +98,7 @@ class TaskDialogTest {
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         transcripts,
-        new GitLabDialog(new ManageGitLabService(access, connections, api, clock), repos),
+        new ConnectionsDialog(new ManageConnectionsService(access, connections, api, clock), repos),
         new TaskDialog(new ManageTasksService(repoAccess, api), repos, transcripts),
         new DocsDialog(new BrowseDocsService(repoAccess, api)),
         ZoneOffset.UTC);
@@ -110,7 +109,7 @@ class TaskDialogTest {
     projects.save(Project.named(ELT_IMZO));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 

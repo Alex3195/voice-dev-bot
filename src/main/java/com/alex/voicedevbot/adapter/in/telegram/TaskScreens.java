@@ -3,10 +3,10 @@ package com.alex.voicedevbot.adapter.in.telegram;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TasksResult;
-import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
 import java.net.URI;
@@ -78,7 +78,7 @@ final class TaskScreens {
       rows.add(groups.subList(i, Math.min(i + GROUPS_PER_ROW, groups.size())));
     }
     rows.add(List.of(new Button("➕ Yangi task", Actions.TASK_NEW)));
-    rows.add(List.of(GitLabScreens.backToCard(overview.project())));
+    rows.add(List.of(ConnectionScreens.backToCard(overview.project())));
     return new Screen(html.toString().strip(), rows);
   }
 
@@ -185,7 +185,7 @@ final class TaskScreens {
   }
 
   /** Tasdiqsiz hech narsa yaratilmaydi. */
-  static Screen confirm(NewTask draft, ProjectName project, GitLabRepo repo) {
+  static Screen confirm(NewTask draft, ProjectName project, Repo repo) {
     String description =
         draft.description().isBlank()
             ? "<i>tavsifsiz</i>"
@@ -245,7 +245,7 @@ final class TaskScreens {
     return state + " · " + link(mr.webUrl(), "!" + mr.iid() + " " + mr.title());
   }
 
-  private static String repoLink(GitLabRepo repo) {
+  private static String repoLink(Repo repo) {
     return "📂 " + link(repo.webUrl(), repo.path());
   }
 

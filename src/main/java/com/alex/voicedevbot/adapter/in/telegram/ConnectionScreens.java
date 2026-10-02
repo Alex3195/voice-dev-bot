@@ -1,14 +1,14 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.ConnectionView;
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabNamespace;
-import com.alex.voicedevbot.domain.GitLabRepo;
+import com.alex.voicedevbot.domain.Namespace;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Repo;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,11 +16,11 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /** GitLab ulanishlari va project repo'si ekranlari. Holatsiz, faqat ko'rinish. */
-final class GitLabScreens {
+final class ConnectionScreens {
 
   static final Button BACK_TO_LIST = new Button("⬅️ Orqaga", Actions.GITLAB);
 
-  private GitLabScreens() {}
+  private ConnectionScreens() {}
 
   static Screen list(List<ConnectionView> connections) {
     List<List<Button>> rows = new ArrayList<>();
@@ -37,7 +37,9 @@ final class GitLabScreens {
         connections.isEmpty()
             ? "Hali ulanish yo'q. gitlab.com yoki o'z serveringizni ulang — projectlar shu orqali"
                 + " repo'ga bog'lanadi."
-            : connections.stream().map(GitLabScreens::summary).collect(Collectors.joining("\n"));
+            : connections.stream()
+                .map(ConnectionScreens::summary)
+                .collect(Collectors.joining("\n"));
     return new Screen("🔗 <b>GitLab ulanishlari</b>\n\n" + body, rows);
   }
 
@@ -91,7 +93,7 @@ final class GitLabScreens {
         List.of(List.of(BotScreens.CANCEL)));
   }
 
-  static Screen askToken(GitLabAddress address) {
+  static Screen askToken(ServerAddress address) {
     return new Screen(
         "🔑 <b>"
             + Html.escape(address.label())
@@ -122,7 +124,7 @@ final class GitLabScreens {
         List.of(List.of(new Button("🔑 Tokenni yangilash", Actions.GITLAB_RENEW + view.id()))));
   }
 
-  static String problem(GitLabProblem problem) {
+  static String problem(ConnectionProblem problem) {
     return switch (problem) {
       case INVALID_ADDRESS ->
           "⚠️ Manzil noto'g'ri. Masalan: gitlab.com yoki https://git.example.uz";
@@ -146,7 +148,7 @@ final class GitLabScreens {
   }
 
   static Screen linked(RepoLinkResult.Linked linked) {
-    GitLabRepo repo = linked.link().repo();
+    Repo repo = linked.link().repo();
     String html =
         "🔗 "
             + Html.bold(linked.project().value())
@@ -189,7 +191,7 @@ final class GitLabScreens {
 
   static Screen repos(RepoLinkResult.Repos found) {
     List<List<Button>> rows = new ArrayList<>();
-    for (GitLabRepo repo : found.repos()) {
+    for (Repo repo : found.repos()) {
       rows.add(
           List.of(
               new Button(
@@ -210,7 +212,7 @@ final class GitLabScreens {
 
   static Screen namespaces(RepoLinkResult.Namespaces found) {
     List<List<Button>> rows = new ArrayList<>();
-    for (GitLabNamespace namespace : found.namespaces()) {
+    for (Namespace namespace : found.namespaces()) {
       String icon = namespace.personal() ? "👤 " : "👥 ";
       rows.add(
           List.of(
@@ -306,7 +308,7 @@ final class GitLabScreens {
   }
 
   /** GitLab token yaratish sahifasiga nom va {@code api} ruxsati oldindan to'ldirilgan havola. */
-  private static String tokenHowTo(GitLabAddress address) {
+  private static String tokenHowTo(ServerAddress address) {
     String url =
         address.uri()
             + "/-/user_settings/personal_access_tokens?name=voice-dev-bot&scopes="

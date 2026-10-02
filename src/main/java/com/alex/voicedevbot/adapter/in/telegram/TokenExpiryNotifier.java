@@ -32,7 +32,7 @@ public class TokenExpiryNotifier implements Runnable {
   public void run() {
     try {
       for (ConnectionView view : alerts.dueAlerts()) {
-        Screen alert = GitLabScreens.tokenAlert(view);
+        Screen alert = ConnectionScreens.tokenAlert(view);
         recipients.forEach(user -> bot.notify(user, alert));
       }
     } catch (RuntimeException e) {

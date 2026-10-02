@@ -62,7 +62,7 @@ public class BotConversation {
   private final ManageGlossaryUseCase glossary;
   private final ChangeLanguageUseCase language;
   private final BrowseTranscriptsUseCase transcripts;
-  private final GitLabDialog gitLab;
+  private final ConnectionsDialog gitLab;
   private final TaskDialog tasks;
   private final DocsDialog docs;
   private final ZoneId zone;
@@ -76,7 +76,7 @@ public class BotConversation {
       ManageGlossaryUseCase glossary,
       ChangeLanguageUseCase language,
       BrowseTranscriptsUseCase transcripts,
-      GitLabDialog gitLab,
+      ConnectionsDialog gitLab,
       TaskDialog tasks,
       DocsDialog docs,
       ZoneId zone) {

@@ -18,7 +18,7 @@ public sealed interface RepoUnavailable extends TasksResult, DocsResult {
   /** Token tugagan yoki GitLab uni rad etdi — amal o'rniga tokenni yangilash taklif qilinadi. */
   record NeedsNewToken(ConnectionView connection) implements RepoUnavailable {}
 
-  record Failed(GitLabProblem problem) implements RepoUnavailable {}
+  record Failed(ConnectionProblem problem) implements RepoUnavailable {}
 
   /** Yuboruvchi whitelist'da yo'q. */
   record AccessDenied() implements RepoUnavailable {}

@@ -1,8 +1,8 @@
 package com.alex.voicedevbot.adapter.out.persistence;
 
 import com.alex.voicedevbot.application.port.out.ProjectRepoLinks;
-import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.RepoLink;
 import java.net.URI;
 import java.sql.PreparedStatement;
@@ -61,8 +61,8 @@ public class JdbcProjectRepoLinks implements ProjectRepoLinks {
               if (!rows.next()) {
                 return Optional.empty();
               }
-              GitLabRepo repo =
-                  new GitLabRepo(
+              Repo repo =
+                  new Repo(
                       rows.getLong("gitlab_project_id"),
                       rows.getString("path"),
                       URI.create(rows.getString("web_url")));

@@ -5,12 +5,12 @@ import java.util.regex.Pattern;
 /**
  * GitLab access token. Sir: {@link #toString()} va {@link #masked()} faqat chetlarini ko'rsatadi.
  */
-public record GitLabToken(String value) {
+public record AccessToken(String value) {
 
   private static final Pattern ALLOWED = Pattern.compile("[A-Za-z0-9._\\-]{8,512}");
   private static final int VISIBLE_SUFFIX = 4;
 
-  public GitLabToken {
+  public AccessToken {
     if (value == null || !ALLOWED.matcher(value.strip()).matches()) {
       throw new IllegalArgumentException("GitLab token has invalid format");
     }
@@ -27,6 +27,6 @@ public record GitLabToken(String value) {
 
   @Override
   public String toString() {
-    return "GitLabToken[" + masked() + "]";
+    return "AccessToken[" + masked() + "]";
   }
 }

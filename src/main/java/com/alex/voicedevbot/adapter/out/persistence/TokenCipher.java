@@ -1,7 +1,7 @@
 package com.alex.voicedevbot.adapter.out.persistence;
 
 import com.alex.voicedevbot.application.port.out.StorageException;
-import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.domain.AccessToken;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -41,7 +41,7 @@ public final class TokenCipher {
     this.key = new SecretKeySpec(bytes, "AES");
   }
 
-  byte[] encrypt(GitLabToken token) {
+  byte[] encrypt(AccessToken token) {
     byte[] iv = new byte[IV_BYTES];
     random.nextBytes(iv);
     try {
@@ -57,12 +57,12 @@ public final class TokenCipher {
   /**
    * @throws StorageException kalit boshqa yoki ma'lumot buzilgan bo'lsa
    */
-  GitLabToken decrypt(byte[] stored) {
+  AccessToken decrypt(byte[] stored) {
     try {
       Cipher cipher = Cipher.getInstance(ALGORITHM);
       cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, stored, 0, IV_BYTES));
       byte[] plain = cipher.doFinal(stored, IV_BYTES, stored.length - IV_BYTES);
-      return new GitLabToken(new String(plain, StandardCharsets.UTF_8));
+      return new AccessToken(new String(plain, StandardCharsets.UTF_8));
     } catch (GeneralSecurityException | IllegalArgumentException e) {
       throw new StorageException("Failed to decrypt token (was SECRETS_KEY changed?)", e);
     }

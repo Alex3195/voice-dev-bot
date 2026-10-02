@@ -1,8 +1,8 @@
 package com.alex.voicedevbot.config;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation;
+import com.alex.voicedevbot.adapter.in.telegram.ConnectionsDialog;
 import com.alex.voicedevbot.adapter.in.telegram.DocsDialog;
-import com.alex.voicedevbot.adapter.in.telegram.GitLabDialog;
 import com.alex.voicedevbot.adapter.in.telegram.TaskDialog;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.telegram.TelegramAudioSource;
@@ -11,7 +11,7 @@ import com.alex.voicedevbot.application.port.in.BrowseTranscriptsUseCase;
 import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
-import com.alex.voicedevbot.application.port.in.ManageGitLabUseCase;
+import com.alex.voicedevbot.application.port.in.ManageConnectionsUseCase;
 import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
 import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
@@ -55,7 +55,7 @@ class TelegramConfig {
       ManageGlossaryUseCase glossary,
       ChangeLanguageUseCase language,
       BrowseTranscriptsUseCase transcripts,
-      ManageGitLabUseCase gitLab,
+      ManageConnectionsUseCase gitLab,
       LinkRepoUseCase repos,
       ManageTasksUseCase tasks,
       BrowseDocsUseCase docs,
@@ -65,7 +65,7 @@ class TelegramConfig {
         glossary,
         language,
         transcripts,
-        new GitLabDialog(gitLab, repos),
+        new ConnectionsDialog(gitLab, repos),
         new TaskDialog(tasks, repos, transcripts),
         new DocsDialog(docs),
         zoneId);

@@ -1,8 +1,8 @@
 package com.alex.voicedevbot.application.port.out;
 
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
-import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.domain.AccessToken;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.time.LocalDate;
 import java.util.List;
@@ -12,14 +12,14 @@ import java.util.Optional;
  * GitLab ulanishlari. Token faqat shifrlangan holda saqlanadi. Bitta server + token egasi — bitta
  * ulanish: qayta qo'shilsa token yangilanadi.
  */
-public interface GitLabConnectionRepository {
+public interface ConnectionRepository {
 
-  GitLabConnection save(GitLabAddress address, GitLabToken token, TokenInfo info);
+  ProviderConnection save(ServerAddress address, AccessToken token, TokenInfo info);
 
   /** Server bo'yicha, keyin token egasi bo'yicha tartiblangan. */
-  List<GitLabConnection> findAll();
+  List<ProviderConnection> findAll();
 
-  Optional<GitLabConnection> find(long id);
+  Optional<ProviderConnection> find(long id);
 
   /** Ulanish va unga bog'langan projectlarning repo havolalari o'chiriladi. */
   void remove(long id);

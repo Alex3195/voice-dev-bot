@@ -2,7 +2,7 @@ package com.alex.voicedevbot.application.service;
 
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TasksResult;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
+import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
@@ -24,9 +24,9 @@ public class ManageTasksService implements ManageTasksUseCase {
   public static final int ISSUE_LIMIT = 300;
 
   private final ProjectRepoAccess access;
-  private final GitLabApi gitLab;
+  private final CodeHost gitLab;
 
-  public ManageTasksService(ProjectRepoAccess access, GitLabApi gitLab) {
+  public ManageTasksService(ProjectRepoAccess access, CodeHost gitLab) {
     this.access = Objects.requireNonNull(access, "access");
     this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
   }

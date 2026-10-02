@@ -8,20 +8,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.alex.voicedevbot.application.port.in.ConnectionProblem;
 import com.alex.voicedevbot.application.port.in.DocsResult;
-import com.alex.voicedevbot.application.port.in.GitLabProblem;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
-import com.alex.voicedevbot.application.port.out.GitLabApi;
+import com.alex.voicedevbot.application.port.out.CodeHost;
 import com.alex.voicedevbot.domain.AccessPolicy;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.ProviderConnection;
 import com.alex.voicedevbot.domain.RepoLink;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.UserSettings;
 import com.alex.voicedevbot.support.GitLabFixtures;
-import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryConnectionRepository;
 import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
 import java.time.Clock;
@@ -42,10 +42,9 @@ class BrowseDocsServiceTest {
 
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
-  private final InMemoryGitLabConnectionRepository connections =
-      new InMemoryGitLabConnectionRepository();
+  private final InMemoryConnectionRepository connections = new InMemoryConnectionRepository();
   private final InMemoryProjectRepoLinks links = new InMemoryProjectRepoLinks();
-  private final GitLabApi api = mock(GitLabApi.class);
+  private final CodeHost api = mock(CodeHost.class);
   private final BrowseDocsService service =
       new BrowseDocsService(
           new ProjectRepoAccess(
@@ -57,13 +56,13 @@ class BrowseDocsServiceTest {
                   GitLabFixtures.TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)),
           api);
 
-  private GitLabConnection connection;
+  private ProviderConnection connection;
 
   @BeforeEach
   void linkedProject() {
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    connection = connections.save(GitLabAddress.GITLAB_COM, TOKEN, VALID);
+    connection = connections.save(ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
   }
 
@@ -112,14 +111,14 @@ class BrowseDocsServiceTest {
     when(api.readFile(connection, REPO.id(), "docs/old.md")).thenReturn(Optional.empty());
 
     assertThat(service.open(USER, "docs/old.md"))
-        .isEqualTo(new RepoUnavailable.Failed(GitLabProblem.NOT_FOUND));
+        .isEqualTo(new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));
   }
 
   @ParameterizedTest
   @ValueSource(strings = {".env", "src/Main.md", "docs/../.env.md", "/etc/passwd.md", "docs/a.txt"})
   void should_not_read_files_outside_documents(String path) {
     assertThat(service.open(USER, path))
-        .isEqualTo(new RepoUnavailable.Failed(GitLabProblem.NOT_FOUND));
+        .isEqualTo(new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));
     verifyNoInteractions(api);
   }
 

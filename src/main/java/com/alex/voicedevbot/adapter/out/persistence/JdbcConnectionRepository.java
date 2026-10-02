@@ -1,9 +1,9 @@
 package com.alex.voicedevbot.adapter.out.persistence;
 
-import com.alex.voicedevbot.application.port.out.GitLabConnectionRepository;
-import com.alex.voicedevbot.domain.GitLabAddress;
-import com.alex.voicedevbot.domain.GitLabConnection;
-import com.alex.voicedevbot.domain.GitLabToken;
+import com.alex.voicedevbot.application.port.out.ConnectionRepository;
+import com.alex.voicedevbot.domain.AccessToken;
+import com.alex.voicedevbot.domain.ProviderConnection;
+import com.alex.voicedevbot.domain.ServerAddress;
 import com.alex.voicedevbot.domain.TokenInfo;
 import java.sql.Array;
 import java.sql.Connection;
@@ -21,7 +21,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 
 /** GitLab ulanishlari PostgreSQL'da; token {@link TokenCipher} bilan shifrlangan. */
-public class JdbcGitLabConnectionRepository implements GitLabConnectionRepository {
+public class JdbcConnectionRepository implements ConnectionRepository {
 
   private static final String SELECT =
       "select id, base_url, username, token_encrypted, scopes, expires_at from gitlab_connection";
@@ -38,13 +38,13 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
   private final Jdbc jdbc;
   private final TokenCipher cipher;
 
-  public JdbcGitLabConnectionRepository(DataSource dataSource, TokenCipher cipher) {
+  public JdbcConnectionRepository(DataSource dataSource, TokenCipher cipher) {
     this.jdbc = new Jdbc(dataSource);
     this.cipher = Objects.requireNonNull(cipher, "cipher");
   }
 
   @Override
-  public GitLabConnection save(GitLabAddress address, GitLabToken token, TokenInfo info) {
+  public ProviderConnection save(ServerAddress address, AccessToken token, TokenInfo info) {
     long id =
         jdbc.query(
             "save GitLab connection",
@@ -57,11 +57,11 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
                 }
               }
             });
-    return new GitLabConnection(id, address, token, info);
+    return new ProviderConnection(id, address, token, info);
   }
 
   @Override
-  public List<GitLabConnection> findAll() {
+  public List<ProviderConnection> findAll() {
     return jdbc.query(
         "list GitLab connections",
         connection -> {
@@ -73,7 +73,7 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
   }
 
   @Override
-  public Optional<GitLabConnection> find(long id) {
+  public Optional<ProviderConnection> find(long id) {
     return jdbc.query(
         "find GitLab connection",
         connection -> {
@@ -117,8 +117,8 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
   private void bind(
       Connection connection,
       PreparedStatement upsert,
-      GitLabAddress address,
-      GitLabToken token,
+      ServerAddress address,
+      AccessToken token,
       TokenInfo info)
       throws SQLException {
     upsert.setString(1, address.toString());
@@ -132,8 +132,8 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
     }
   }
 
-  private List<GitLabConnection> read(PreparedStatement select) throws SQLException {
-    List<GitLabConnection> connections = new ArrayList<>();
+  private List<ProviderConnection> read(PreparedStatement select) throws SQLException {
+    List<ProviderConnection> connections = new ArrayList<>();
     try (ResultSet rows = select.executeQuery()) {
       while (rows.next()) {
         connections.add(connectionOf(rows));
@@ -142,7 +142,7 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
     return connections;
   }
 
-  private GitLabConnection connectionOf(ResultSet row) throws SQLException {
+  private ProviderConnection connectionOf(ResultSet row) throws SQLException {
     String owner = row.getString("username");
     Array scopesArray = row.getArray("scopes");
     Set<String> scopes = Set.of((String[]) scopesArray.getArray());
@@ -151,9 +151,9 @@ public class JdbcGitLabConnectionRepository implements GitLabConnectionRepositor
         expiresAt == null
             ? TokenInfo.withoutExpiry(owner, scopes)
             : TokenInfo.expiring(owner, scopes, expiresAt.toLocalDate());
-    return new GitLabConnection(
+    return new ProviderConnection(
         row.getLong("id"),
-        GitLabAddress.parse(row.getString("base_url")),
+        ServerAddress.parse(row.getString("base_url")),
         cipher.decrypt(row.getBytes("token_encrypted")),
         info);
   }

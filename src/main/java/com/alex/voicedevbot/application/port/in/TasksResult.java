@@ -1,8 +1,8 @@
 package com.alex.voicedevbot.application.port.in;
 
-import com.alex.voicedevbot.domain.GitLabRepo;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.ProjectName;
+import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
 import java.util.Collections;
@@ -22,7 +22,7 @@ public sealed interface TasksResult
   /**
    * @param counts har holatda nechta task; bo'sh holatlar yo'q, {@link TaskStatus} tartibida
    */
-  record Overview(ProjectName project, GitLabRepo repo, Map<TaskStatus, Integer> counts)
+  record Overview(ProjectName project, Repo repo, Map<TaskStatus, Integer> counts)
       implements TasksResult {
 
     public Overview {
