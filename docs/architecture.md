@@ -38,10 +38,21 @@ Telegram Update
       HandleVoiceMessageService:
         1. AccessPolicy.isAllowed(sender)    (whitelist — yuklab olishdan OLDIN)
         2. AudioSource.fetch(ref)            → adapter/out/telegram/TelegramAudioSource
-        3. SpeechToText.transcribe(audio)    → adapter/out/stt/WhisperCppSpeechToText  (STT_ENGINE=stub → StubSpeechToText)
+        3. TranscriptionHintsResolver        (foydalanuvchi tili + faol project lug'ati)
+             UserSettingsRepository, ProjectRepository → adapter/out/persistence (PostgreSQL)
+        4. SpeechToText.transcribe(audio, hints) → adapter/out/stt/WhisperCppSpeechToText  (STT_ENGINE=stub → StubSpeechToText)
   ← VoiceHandlingResult (sealed: Transcribed | AccessDenied)
   → VoiceDevBot javob yuboradi
+
+Telegram "/buyruq"
+  → adapter/in/telegram/TelegramCommands
+  → ManageProjectsUseCase | ManageGlossaryUseCase | ChangeLanguageUseCase  (har biri whitelist'ni tekshiradi)
+  ← sealed natija → javob matni (AccessDenied → jim)
 ```
+
+Persistence adapteri oddiy JDBC (`javax.sql.DataSource`) — Spring faqat `config`da bo'lgani uchun
+`JdbcClient` ishlatilmaydi. DataSource va Flyway migratsiyalarini (`src/main/resources/db/migration`)
+Spring Boot `config` darajasida sozlaydi.
 
 ## Qoidalar
 

@@ -13,10 +13,12 @@ import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
 import com.alex.voicedevbot.application.port.in.VoiceHandlingResult;
 import com.alex.voicedevbot.application.port.in.VoiceMessage;
 import com.alex.voicedevbot.application.port.out.AudioUnavailableException;
+import com.alex.voicedevbot.application.port.out.StorageException;
 import com.alex.voicedevbot.application.port.out.TranscriptionException;
 import com.alex.voicedevbot.domain.AudioRef;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.Transcript;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -38,7 +40,8 @@ class VoiceDevBotTest {
 
   private final HandleVoiceMessageUseCase useCase = mock(HandleVoiceMessageUseCase.class);
   private final TelegramClient telegramClient = mock(TelegramClient.class);
-  private final VoiceDevBot bot = new VoiceDevBot(useCase, telegramClient);
+  private final TelegramCommands commands = mock(TelegramCommands.class);
+  private final VoiceDevBot bot = new VoiceDevBot(useCase, commands, telegramClient);
 
   @Test
   void should_reply_with_transcript_when_voice_is_transcribed() throws TelegramApiException {
@@ -108,7 +111,12 @@ class VoiceDevBotTest {
   }
 
   @ParameterizedTest
-  @ValueSource(classes = {AudioUnavailableException.class, TranscriptionException.class})
+  @ValueSource(
+      classes = {
+        AudioUnavailableException.class,
+        TranscriptionException.class,
+        StorageException.class
+      })
   void should_reply_with_failure_when_processing_fails(Class<? extends RuntimeException> failure)
       throws Exception {
     when(useCase.handle(any()))
@@ -129,6 +137,35 @@ class VoiceDevBotTest {
     bot.consume(voiceUpdate("audio/ogg"));
 
     verify(telegramClient).execute(any(SendMessage.class));
+  }
+
+  @Test
+  void should_route_command_and_send_its_reply() throws TelegramApiException {
+    when(commands.handle(new TelegramUserId(USER_ID), "/project"))
+        .thenReturn(Optional.of("Projectlar: ..."));
+
+    bot.consume(textUpdate("/project"));
+
+    assertThat(sentMessage().getText()).isEqualTo("Projectlar: ...");
+    verifyNoInteractions(useCase);
+  }
+
+  @Test
+  void should_stay_silent_when_command_has_no_reply() throws TelegramApiException {
+    when(commands.handle(any(), any())).thenReturn(Optional.empty());
+
+    bot.consume(textUpdate("/help"));
+
+    verify(telegramClient, never()).execute(any(SendMessage.class));
+  }
+
+  @Test
+  void should_reply_with_failure_when_command_cannot_reach_storage() throws TelegramApiException {
+    when(commands.handle(any(), any())).thenThrow(new StorageException("db down", null));
+
+    bot.consume(textUpdate("/project"));
+
+    assertThat(sentMessage().getText()).isEqualTo(VoiceDevBot.COMMAND_FAILURE_REPLY);
   }
 
   @Test
@@ -158,6 +195,13 @@ class VoiceDevBotTest {
     ArgumentCaptor<SendMessage> captor = ArgumentCaptor.forClass(SendMessage.class);
     verify(telegramClient).execute(captor.capture());
     return captor.getValue();
+  }
+
+  private static Update textUpdate(String text) {
+    Update update = voiceUpdate("audio/ogg");
+    update.getMessage().setVoice(null);
+    update.getMessage().setText(text);
+    return update;
   }
 
   private static Update voiceUpdate(String mimeType) {

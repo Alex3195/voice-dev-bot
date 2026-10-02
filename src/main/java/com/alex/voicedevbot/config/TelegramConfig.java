@@ -1,8 +1,12 @@
 package com.alex.voicedevbot.config;
 
+import com.alex.voicedevbot.adapter.in.telegram.TelegramCommands;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.telegram.TelegramAudioSource;
+import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
+import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
+import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.out.AudioSource;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -37,9 +41,19 @@ class TelegramConfig {
   }
 
   @Bean
+  TelegramCommands telegramCommands(
+      ManageProjectsUseCase projects,
+      ManageGlossaryUseCase glossary,
+      ChangeLanguageUseCase language) {
+    return new TelegramCommands(projects, glossary, language);
+  }
+
+  @Bean
   VoiceDevBot voiceDevBot(
-      HandleVoiceMessageUseCase handleVoiceMessageUseCase, TelegramClient telegramClient) {
-    return new VoiceDevBot(handleVoiceMessageUseCase, telegramClient);
+      HandleVoiceMessageUseCase handleVoiceMessageUseCase,
+      TelegramCommands telegramCommands,
+      TelegramClient telegramClient) {
+    return new VoiceDevBot(handleVoiceMessageUseCase, telegramCommands, telegramClient);
   }
 
   @Bean(destroyMethod = "close")

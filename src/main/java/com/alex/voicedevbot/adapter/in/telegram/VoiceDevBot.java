@@ -4,6 +4,7 @@ import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
 import com.alex.voicedevbot.application.port.in.VoiceHandlingResult;
 import com.alex.voicedevbot.application.port.in.VoiceMessage;
 import com.alex.voicedevbot.application.port.out.AudioUnavailableException;
+import com.alex.voicedevbot.application.port.out.StorageException;
 import com.alex.voicedevbot.application.port.out.TranscriptionException;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import java.util.Objects;
@@ -24,6 +25,7 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
 
   static final String TRANSCRIBED_REPLY = "Matn:\n\n%s";
   static final String FAILURE_REPLY = "Ovozni qayta ishlab bo'lmadi, qaytadan urinib ko'ring.";
+  static final String COMMAND_FAILURE_REPLY = "Buyruqni bajarib bo'lmadi, keyinroq urinib ko'ring.";
   static final String TOO_LARGE_REPLY =
       "Fayl juda katta (%d MB). Telegram bot %d MB gacha faylni yuklab ola oladi.";
 
@@ -32,10 +34,15 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
   private static final Logger log = LoggerFactory.getLogger(VoiceDevBot.class);
 
   private final HandleVoiceMessageUseCase handleVoiceMessage;
+  private final TelegramCommands commands;
   private final TelegramClient telegramClient;
 
-  public VoiceDevBot(HandleVoiceMessageUseCase handleVoiceMessage, TelegramClient telegramClient) {
+  public VoiceDevBot(
+      HandleVoiceMessageUseCase handleVoiceMessage,
+      TelegramCommands commands,
+      TelegramClient telegramClient) {
     this.handleVoiceMessage = Objects.requireNonNull(handleVoiceMessage, "handleVoiceMessage");
+    this.commands = Objects.requireNonNull(commands, "commands");
     this.telegramClient = Objects.requireNonNull(telegramClient, "telegramClient");
   }
 
@@ -45,7 +52,23 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
       return;
     }
     Message message = update.getMessage();
+    if (TelegramCommands.isCommand(message.getText())) {
+      handleCommand(message);
+      return;
+    }
     IncomingAudio.from(message).ifPresent(audio -> handle(message, audio));
+  }
+
+  private void handleCommand(Message message) {
+    TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
+    try {
+      commands
+          .handle(sender, message.getText())
+          .ifPresent(text -> reply(message.getChatId(), text));
+    } catch (StorageException e) {
+      log.error("Failed to handle command in chat {}", message.getChatId(), e);
+      reply(message.getChatId(), COMMAND_FAILURE_REPLY);
+    }
   }
 
   /**
@@ -61,7 +84,7 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
         case VoiceHandlingResult.AccessDenied() ->
             log.warn("Ignoring audio message from non-whitelisted user {}", sender.value());
       }
-    } catch (AudioUnavailableException | TranscriptionException e) {
+    } catch (AudioUnavailableException | TranscriptionException | StorageException e) {
       log.error("Failed to handle audio message in chat {}", message.getChatId(), e);
       reply(message.getChatId(), failureReply(audio));
     }
