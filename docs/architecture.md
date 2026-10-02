@@ -52,8 +52,10 @@ Telegram matn / "/buyruq" / inline tugma
   → adapter/in/telegram/BotConversation       (ekranlar: BotScreens)
       Ulanishlar va repo tugmalari ("cn…") va kutilayotgan kiritish → ConnectionsDialog (ConnectionScreens)
       Tasklar ("tk…", yangi task qoralamasi) → TaskDialog (TaskScreens); hujjatlar ("dc…") → DocsDialog (DocScreens)
+      Claude modeli ("md…", /model) → ModelDialog (ModelScreens)
   → ManageProjectsUseCase | ManageGlossaryUseCase | ChangeLanguageUseCase | BrowseTranscriptsUseCase
     | ManageConnectionsUseCase | LinkRepoUseCase | ManageTasksUseCase | BrowseDocsUseCase
+    | DraftTaskUseCase | ChooseModelUseCase
                                                                (har biri whitelist'ni tekshiradi)
       Tasklar va hujjatlar → ProjectRepoAccess (whitelist, faol project, repo, token; xato → RepoUnavailable)
       Integrations: ulanishning provayderi bo'yicha adapter (config'da ro'yxatga olinadi)
@@ -62,6 +64,9 @@ Telegram matn / "/buyruq" / inline tugma
           GITHUB → adapter/out/github/GitHubHttpApi (REST, Bearer; api.github.com)
       ConnectionRepository → JdbcConnectionRepository (provider_connection; token: TokenCipher, AES-GCM)
       ProjectRepoLinks → JdbcProjectRepoLinks; RepoTemplate → adapter/out/template/ClasspathRepoTemplate
+      Transkriptdan task → TaskParser → adapter/out/claude/ClaudeTaskParser (Messages API, structured outputs,
+        kesh: ko'rsatma | projectlar + lug'at + repo qoidalari | transkript); ModelCatalog → ClaudeModelCatalog;
+        ANTHROPIC_API_KEY bo'lmasa — UnconfiguredClaude (NOT_CONFIGURED → oddiy qoralama)
   ← sealed natija → Screen (AccessDenied → jim); token yozilgan xabar VoiceDevBot tomonidan o'chiriladi
 
 Rejalashtirilgan (config'dagi ScheduledExecutorService, soatiga bir marta)
