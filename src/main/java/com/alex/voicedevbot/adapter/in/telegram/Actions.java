@@ -1,5 +1,6 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.TaskStatus;
 import java.util.Locale;
@@ -65,6 +66,11 @@ final class Actions {
   static final String TASK_REVIEW = "tk:rv";
   static final String TASK_DISCARD = "tk:x";
 
+  static final String TASK_ADD_TERM = "tk:gl:";
+
+  static final String MODELS = "md";
+  static final String MODEL_PREFIX = "md:";
+
   static final String DOCS = "dc";
   static final String DOC_PREFIX = "dc:";
 
@@ -126,6 +132,17 @@ final class Actions {
   /** Transkript ostida — yangi xabar bo'lib chiqadi, transkript o'chmaydi. */
   static String taskFromTranscript(long journalId) {
     return NEW_MESSAGE + TASK_FROM_TRANSCRIPT + journalId;
+  }
+
+  static String chooseModel(ModelId model) {
+    return MODEL_PREFIX + model.value();
+  }
+
+  /**
+   * @param index qoralamadagi lug'at taklifining tartib raqami
+   */
+  static String addTerm(int index) {
+    return TASK_ADD_TERM + index;
   }
 
   /** Hujjat yo'li 64 baytdan uzun bo'lishi mumkin — uning hash'i yoziladi. */

@@ -2,10 +2,15 @@ package com.alex.voicedevbot.adapter.in.telegram;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.application.port.in.BrowseTranscriptsUseCase;
+import com.alex.voicedevbot.application.port.in.DraftTaskUseCase;
+import com.alex.voicedevbot.application.port.in.GlossaryCommandResult;
+import com.alex.voicedevbot.application.port.in.LanguageModelProblem;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
+import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.RepoLinkResult;
 import com.alex.voicedevbot.application.port.in.RepoUnavailable;
+import com.alex.voicedevbot.application.port.in.TaskDraftResult;
 import com.alex.voicedevbot.application.port.in.TasksResult;
 import com.alex.voicedevbot.application.port.in.TranscriptsResult;
 import com.alex.voicedevbot.domain.NewTask;
@@ -46,25 +51,53 @@ public class TaskDialog {
     EDITED_DESCRIPTION
   }
 
-  /** Sarlavha kiritilgach, tavsif hali bo'lmasligi mumkin. */
-  private record Draft(String title, Optional<String> description) {
+  /**
+   * Sarlavha kiritilgach, tavsif hali bo'lmasligi mumkin.
+   *
+   * @param claude qoralamani Claude tuzgan bo'lsa — uning izohlari (tahrirdan keyin ham qoladi)
+   */
+  private record Draft(String title, Optional<String> description, Optional<ClaudeNotes> claude) {
+
+    Draft(String title, Optional<String> description) {
+      this(title, description, Optional.empty());
+    }
 
     NewTask task() {
       return new NewTask(title, description.orElse(""));
+    }
+
+    Draft withTitle(String newTitle) {
+      return new Draft(newTitle, description, claude);
+    }
+
+    Draft withDescription(String newDescription) {
+      return new Draft(title, Optional.of(newDescription), claude);
+    }
+
+    Draft withoutSuggestion(String term) {
+      return new Draft(title, description, claude.map(notes -> notes.without(term)));
     }
   }
 
   private final ManageTasksUseCase tasks;
   private final LinkRepoUseCase repos;
   private final BrowseTranscriptsUseCase transcripts;
+  private final DraftTaskUseCase drafter;
+  private final ManageGlossaryUseCase glossary;
   private final Map<TelegramUserId, Awaiting> awaiting = new ConcurrentHashMap<>();
   private final Map<TelegramUserId, Draft> drafts = new ConcurrentHashMap<>();
 
   public TaskDialog(
-      ManageTasksUseCase tasks, LinkRepoUseCase repos, BrowseTranscriptsUseCase transcripts) {
+      ManageTasksUseCase tasks,
+      LinkRepoUseCase repos,
+      BrowseTranscriptsUseCase transcripts,
+      DraftTaskUseCase drafter,
+      ManageGlossaryUseCase glossary) {
     this.tasks = Objects.requireNonNull(tasks, "tasks");
     this.repos = Objects.requireNonNull(repos, "repos");
     this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
+    this.drafter = Objects.requireNonNull(drafter, "drafter");
+    this.glossary = Objects.requireNonNull(glossary, "glossary");
   }
 
   static boolean handles(String action) {
@@ -97,12 +130,11 @@ public class TaskDialog {
     Optional<Draft> draft = Optional.ofNullable(drafts.get(user));
     return switch (current) {
       case TITLE -> withTitle(user, input, Optional.empty(), Awaiting.TITLE);
-      case EDITED_TITLE ->
-          withTitle(user, input, draft.flatMap(Draft::description), Awaiting.EDITED_TITLE);
+      case EDITED_TITLE -> editedTitle(user, draft, input);
       case DESCRIPTION, EDITED_DESCRIPTION ->
           draft.isEmpty()
               ? Optional.of(TaskScreens.noDraft())
-              : review(user, new Draft(draft.get().title(), Optional.of(input)));
+              : review(user, draft.get().withDescription(input));
     };
   }
 
@@ -148,6 +180,9 @@ public class TaskDialog {
     if (action.startsWith(Actions.TASK_FROM_TRANSCRIPT)) {
       return id(action, Actions.TASK_FROM_TRANSCRIPT).flatMap(id -> fromTranscript(user, id));
     }
+    if (action.startsWith(Actions.TASK_ADD_TERM)) {
+      return id(action, Actions.TASK_ADD_TERM).flatMap(index -> addTerm(user, index));
+    }
     return Optional.empty();
   }
 
@@ -162,13 +197,76 @@ public class TaskDialog {
         });
   }
 
+  /**
+   * Claude bilan; u o'chiq yoki ishlamasa — oddiy qoralama (birinchi gap sarlavha). Repo ulanmagan
+   * bo'lsa Claude chaqirilmaydi — avval repo ulash taklif qilinadi.
+   */
   private Optional<Screen> fromTranscript(TelegramUserId user, long journalId) {
+    return withRepo(user, linked -> draftFromTranscript(user, journalId));
+  }
+
+  private Optional<Screen> draftFromTranscript(TelegramUserId user, long journalId) {
+    return switch (drafter.fromTranscript(user, journalId)) {
+      case TaskDraftResult.Drafted drafted -> {
+        NewTask task = drafted.draft().toNewTask();
+        yield review(
+            user,
+            new Draft(
+                task.title(),
+                Optional.of(task.description()),
+                Optional.of(ClaudeNotes.of(drafted))));
+      }
+      case TaskDraftResult.Failed(var problem)
+          when problem == LanguageModelProblem.NOT_CONFIGURED ->
+          plainDraft(user, journalId);
+      case TaskDraftResult.Failed(var problem) ->
+          plainDraft(user, journalId)
+              .map(
+                  screen ->
+                      screen.withNotice(
+                          ModelScreens.problem(problem)
+                              + "\nOddiy qoralama (birinchi gap — sarlavha):"));
+      case TaskDraftResult.NotFound() -> plainDraft(user, journalId);
+      case TaskDraftResult.AccessDenied() -> Optional.empty();
+    };
+  }
+
+  private Optional<Screen> plainDraft(TelegramUserId user, long journalId) {
     if (!(transcripts.open(user, journalId) instanceof TranscriptsResult.Opened opened)) {
       return Optional.empty();
     }
     String text = opened.transcript().record().transcription().transcript().text();
     NewTask task = NewTask.fromText(text, TITLE_FROM_TEXT);
     return review(user, new Draft(task.title(), Optional.of(task.description())));
+  }
+
+  /** Claude taklif qilgan atama faol project lug'atiga qo'shiladi, qoralama o'zgarmaydi. */
+  private Optional<Screen> addTerm(TelegramUserId user, long index) {
+    Draft draft = drafts.get(user);
+    if (draft == null) {
+      return Optional.of(TaskScreens.noDraft());
+    }
+    List<String> terms = draft.claude().map(ClaudeNotes::suggestedTerms).orElse(List.of());
+    if (index >= terms.size()) {
+      return review(user, draft);
+    }
+    String term = terms.get((int) index);
+    if (!(glossary.addTerms(user, List.of(term)) instanceof GlossaryCommandResult.Shown)) {
+      return review(user, draft);
+    }
+    return review(user, draft.withoutSuggestion(term))
+        .map(screen -> screen.withNotice("📖 Lug'atga qo'shildi: " + Html.bold(term)));
+  }
+
+  private Optional<Screen> editedTitle(TelegramUserId user, Optional<Draft> draft, String title) {
+    if (draft.isEmpty()) {
+      return withTitle(user, title, Optional.empty(), Awaiting.EDITED_TITLE);
+    }
+    if (title.isEmpty() || title.length() > NewTask.MAX_TITLE_LENGTH) {
+      awaiting.put(user, Awaiting.EDITED_TITLE);
+      return Optional.of(new Screen(INVALID_TITLE, List.of(List.of(BotScreens.CANCEL))));
+    }
+    return review(user, draft.get().withTitle(title));
   }
 
   private Optional<Screen> withTitle(
@@ -211,7 +309,8 @@ public class TaskDialog {
         linked -> {
           drafts.put(user, draft);
           return Optional.of(
-              TaskScreens.confirm(draft.task(), linked.project(), linked.link().repo()));
+              TaskScreens.confirm(
+                  draft.task(), linked.project(), linked.link().repo(), draft.claude()));
         });
   }
 

@@ -65,6 +65,7 @@ public class BotConversation {
   private final ConnectionsDialog connections;
   private final TaskDialog tasks;
   private final DocsDialog docs;
+  private final ModelDialog models;
   private final ZoneId zone;
   private final Map<TelegramUserId, Pending> pending = new ConcurrentHashMap<>();
 
@@ -79,6 +80,7 @@ public class BotConversation {
       ConnectionsDialog connections,
       TaskDialog tasks,
       DocsDialog docs,
+      ModelDialog models,
       ZoneId zone) {
     this.projects = Objects.requireNonNull(projects, "projects");
     this.glossary = Objects.requireNonNull(glossary, "glossary");
@@ -87,6 +89,7 @@ public class BotConversation {
     this.connections = Objects.requireNonNull(connections, "connections");
     this.tasks = Objects.requireNonNull(tasks, "tasks");
     this.docs = Objects.requireNonNull(docs, "docs");
+    this.models = Objects.requireNonNull(models, "models");
     this.zone = Objects.requireNonNull(zone, "zone");
   }
 
@@ -141,6 +144,9 @@ public class BotConversation {
     if (DocsDialog.handles(action)) {
       return docs.onButton(user, action);
     }
+    if (ModelDialog.handles(action)) {
+      return models.onButton(user, action).map(screen -> new Reply(screen, false, ""));
+    }
     if (action.startsWith(Actions.TRANSCRIPTS)) {
       return listTranscripts(user, action.substring(Actions.TRANSCRIPTS.length()));
     }
@@ -183,7 +189,8 @@ public class BotConversation {
       case Actions.LANGUAGES ->
           context(user).map(context -> BotScreens.languages(context.language()));
       case Actions.SETTINGS ->
-          context(user).map(context -> BotScreens.settings(context.language()));
+          context(user)
+              .map(context -> BotScreens.settings(context.language(), models.current(user)));
       default -> Optional.empty();
     };
   }
@@ -199,6 +206,10 @@ public class BotConversation {
       case "addproject" ->
           argument.isEmpty() ? askProjectName(user) : addProject(user, new ProjectName(argument));
       case "glossary" -> glossaryCommand(user, Command.parse("/" + argument));
+      case "model" ->
+          argument.isEmpty()
+              ? models.onButton(user, Actions.MODELS)
+              : models.choose(user, argument);
       case "lang" ->
           argument.isEmpty()
               ? screenFor(user, Actions.LANGUAGES)

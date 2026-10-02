@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.adapter.out.claude.UnconfiguredClaude;
+import com.alex.voicedevbot.application.port.in.LanguageModelProblem;
+import com.alex.voicedevbot.application.port.in.TaskDraftResult;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
+import com.alex.voicedevbot.application.service.ChooseModelService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageConnectionsService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
@@ -18,6 +22,7 @@ import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
 import com.alex.voicedevbot.domain.Glossary;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SourceAudio;
@@ -94,8 +99,20 @@ class BotConversationTest {
             new ManageConnectionsService(
                 access, gitLabConnections, GitLabFixtures.integrations(gitLabApi), clock),
             repos),
-        new TaskDialog(new ManageTasksService(repoAccess), repos, transcripts),
+        new TaskDialog(
+            new ManageTasksService(repoAccess),
+            repos,
+            transcripts,
+            (user, journalId) -> new TaskDraftResult.Failed(LanguageModelProblem.NOT_CONFIGURED),
+            new ManageGlossaryService(access, projects, settings)),
         new DocsDialog(new BrowseDocsService(repoAccess)),
+        new ModelDialog(
+            new ChooseModelService(
+                access,
+                settings,
+                settingsRepository,
+                new UnconfiguredClaude(),
+                new ModelId("claude-opus-5-5"))),
         ZoneOffset.UTC);
   }
 
@@ -305,6 +322,20 @@ class BotConversationTest {
   }
 
   @Test
+  void should_route_model_button_and_command_and_explain_missing_key() {
+    Screen settings = press(Actions.SETTINGS).screen();
+    Screen button = press(Actions.MODELS).screen();
+    Screen command = text("/model");
+    Screen choose = text("/model claude-sonnet-5-5");
+
+    assertThat(settings.html()).contains("🤖 Claude modeli: <code>claude-opus-5-5</code>");
+    assertThat(button.html()).startsWith("ℹ️ Claude ulanmagan");
+    assertThat(command.html()).isEqualTo(button.html());
+    assertThat(choose.html()).isEqualTo(button.html());
+    assertThat(conversation.onButton(STRANGER, Actions.MODELS)).isEmpty();
+  }
+
+  @Test
   void should_list_transcripts_without_project_from_settings() {
     logTranscript(null, "projectsiz", Instant.parse("2026-10-02T09:30:00Z"));
 
@@ -314,7 +345,11 @@ class BotConversationTest {
     assertThat(settings.html()).startsWith("⚙️ <b>Sozlamalar</b>").contains("O'zbek");
     assertThat(actions(settings))
         .containsExactly(
-            Actions.LANGUAGES, Actions.CONNECTIONS, Actions.transcripts(null, 0), Actions.HOME);
+            Actions.LANGUAGES,
+            Actions.MODELS,
+            Actions.CONNECTIONS,
+            Actions.transcripts(null, 0),
+            Actions.HOME);
     assertThat(list.html()).startsWith("📝 <b>Projectsiz transkriptlar</b>");
     assertThat(labels(list)).containsExactly("02.10 09:30 · 1:15 · projectsiz", "⬅️ Orqaga");
     assertThat(actions(list).getLast()).isEqualTo(Actions.SETTINGS);

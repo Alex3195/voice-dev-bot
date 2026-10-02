@@ -6,7 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.alex.voicedevbot.application.port.out.StorageException;
 import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
+import com.alex.voicedevbot.domain.LlmUsage;
 import com.alex.voicedevbot.domain.LoggedTranscript;
+import com.alex.voicedevbot.domain.ModelId;
 import com.alex.voicedevbot.domain.Project;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SourceAudio;
@@ -19,9 +21,11 @@ import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
 import com.alex.voicedevbot.support.PostgresContainer;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
@@ -112,6 +116,37 @@ class JdbcTranscriptionLogIntegrationTest {
     long id = log.append(record(new ProjectName("Yo'q"), "matn", AT));
 
     assertThat(log.find(id).orElseThrow().record().project()).isEmpty();
+  }
+
+  @Test
+  void should_record_llm_usage_as_json_and_overwrite_it() throws Exception {
+    long id = log.append(record(null, "matn", AT));
+    ModelId opus = new ModelId("claude-opus-5-5");
+
+    log.recordLlmUsage(id, new LlmUsage(opus, 1, 2, 3, 4));
+    log.recordLlmUsage(id, new LlmUsage(opus, 120, 900, 40, 210));
+
+    try (Connection connection = dataSource.getConnection();
+        Statement statement = connection.createStatement();
+        ResultSet row =
+            statement.executeQuery(
+                "select llm_usage ->> 'model' as model,"
+                    + " (llm_usage ->> 'input_tokens')::int as input,"
+                    + " (llm_usage ->> 'cache_read_input_tokens')::int as cache_read,"
+                    + " (llm_usage ->> 'cache_creation_input_tokens')::int as cache_write,"
+                    + " (llm_usage ->> 'output_tokens')::int as output"
+                    + " from transcription where id = "
+                    + id)) {
+      row.next();
+      assertThat(row.getString("model")).isEqualTo("claude-opus-5-5");
+      assertThat(
+              List.of(
+                  row.getInt("input"),
+                  row.getInt("cache_read"),
+                  row.getInt("cache_write"),
+                  row.getInt("output")))
+          .containsExactly(120, 900, 40, 210);
+    }
   }
 
   @Test

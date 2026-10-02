@@ -36,3 +36,12 @@ journal:
 secrets:
   # GitLab tokenlarini shifrlash kaliti (AES-256-GCM): openssl rand -base64 32
   key: ${SECRETS_KEY:}
+
+claude:
+  # Bo'sh bo'lsa Claude o'chiq: transkriptdan oddiy qoralama (birinchi gap — sarlavha)
+  api-key: ${ANTHROPIC_API_KEY:}
+  # /model bilan tanlamagan foydalanuvchi uchun
+  default-model: ${CLAUDE_DEFAULT_MODEL:claude-opus-5-5}
+  # Qoralama uchun: low | medium | high | xhigh | max
+  effort: ${CLAUDE_EFFORT:low}
+  timeout: ${CLAUDE_TIMEOUT:2m}

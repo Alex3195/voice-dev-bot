@@ -3,16 +3,20 @@ package com.alex.voicedevbot.adapter.in.telegram;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TasksResult;
+import com.alex.voicedevbot.domain.LlmUsage;
 import com.alex.voicedevbot.domain.MergeRequest;
 import com.alex.voicedevbot.domain.NewTask;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.Repo;
 import com.alex.voicedevbot.domain.Task;
 import com.alex.voicedevbot.domain.TaskStatus;
+import com.alex.voicedevbot.domain.TaskType;
 import java.net.URI;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** Tasklar (Issue) ekranlari. Holatsiz, faqat ko'rinish. */
 final class TaskScreens {
@@ -185,7 +189,11 @@ final class TaskScreens {
   }
 
   /** Tasdiqsiz hech narsa yaratilmaydi. */
-  static Screen confirm(NewTask draft, ProjectName project, Repo repo) {
+  /**
+   * @param claude qoralamani Claude tuzgan bo'lsa — turi, tuzatishlar va lug'at takliflari
+   */
+  static Screen confirm(
+      NewTask draft, ProjectName project, Repo repo, Optional<ClaudeNotes> claude) {
     String description =
         draft.description().isBlank()
             ? "<i>tavsifsiz</i>"
@@ -201,15 +209,66 @@ final class TaskScreens {
             + Html.escape(draft.title())
             + "</b>\n\n"
             + description
+            + claude.map(TaskScreens::claudeNotes).orElse("")
             + "\n\n<i>Yaratilsinmi?</i>";
-    return new Screen(
-        html,
+    List<List<Button>> rows = new ArrayList<>();
+    rows.add(List.of(new Button("✅ Yaratish", Actions.TASK_CONFIRM)));
+    rows.add(
         List.of(
-            List.of(new Button("✅ Yaratish", Actions.TASK_CONFIRM)),
-            List.of(
-                new Button("✏️ Sarlavha", Actions.TASK_EDIT_TITLE),
-                new Button("✏️ Tavsif", Actions.TASK_EDIT_DESCRIPTION)),
-            List.of(new Button("✖️ Bekor qilish", Actions.TASK_DISCARD))));
+            new Button("✏️ Sarlavha", Actions.TASK_EDIT_TITLE),
+            new Button("✏️ Tavsif", Actions.TASK_EDIT_DESCRIPTION)));
+    List<String> terms = claude.map(ClaudeNotes::suggestedTerms).orElse(List.of());
+    for (int i = 0; i < terms.size(); i++) {
+      rows.add(List.of(new Button("💡 Lug'atga: " + terms.get(i), Actions.addTerm(i))));
+    }
+    rows.add(List.of(new Button("✖️ Bekor qilish", Actions.TASK_DISCARD)));
+    return new Screen(html, rows);
+  }
+
+  /** Turi, boshqa project ogohlantirishi, tuzatishlar va narx (tokenlar). */
+  private static String claudeNotes(ClaudeNotes notes) {
+    StringBuilder html =
+        new StringBuilder("\n\n🤖 <i>Claude</i> · ").append(typeLabel(notes.type()));
+    notes
+        .otherProject()
+        .ifPresent(
+            other ->
+                html.append("\n⚠️ Claude bu taskni ")
+                    .append(Html.bold(other.value()))
+                    .append(
+                        " projectiga tegishli deb hisobladi — task faol projectda yaratiladi."));
+    if (!notes.corrections().isEmpty()) {
+      html.append("\n✏️ Tuzatildi: ")
+          .append(
+              notes.corrections().stream()
+                  .map(
+                      correction ->
+                          "<s>"
+                              + Html.escape(correction.heard())
+                              + "</s> → "
+                              + Html.bold(correction.correct()))
+                  .collect(Collectors.joining(", ")));
+    }
+    LlmUsage usage = notes.usage();
+    html.append("\n🧾 ")
+        .append(Html.escape(usage.model().value()))
+        .append(" · ")
+        .append(usage.inputTokens() + usage.cacheReadTokens() + usage.cacheWriteTokens())
+        .append(" in (keshdan ")
+        .append(usage.cacheReadTokens())
+        .append(") · ")
+        .append(usage.outputTokens())
+        .append(" out");
+    return html.toString();
+  }
+
+  private static String typeLabel(TaskType type) {
+    return switch (type) {
+      case FEATURE -> "✨ yangi imkoniyat";
+      case BUG -> "🐞 xato";
+      case IMPROVEMENT -> "🔧 yaxshilash";
+      case CHORE -> "🧹 texnik ish";
+    };
   }
 
   static Screen discarded() {

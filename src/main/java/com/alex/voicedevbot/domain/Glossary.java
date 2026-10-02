@@ -48,6 +48,27 @@ public final class Glossary {
     return new Glossary(result);
   }
 
+  /**
+   * Lug'atda hali yo'q va atama bo'la oladigan so'zlar: takrorsiz, berilgan tartibda.
+   *
+   * @param candidates masalan, Whisper adashgan so'zlarning to'g'ri ko'rinishi
+   */
+  public List<String> missing(Collection<String> candidates) {
+    Map<String, String> result = new LinkedHashMap<>();
+    for (String candidate : candidates) {
+      if (candidate == null
+          || candidate.isBlank()
+          || candidate.strip().length() > MAX_TERM_LENGTH) {
+        continue;
+      }
+      String term = candidate.strip();
+      if (!terms.containsKey(keyOf(term))) {
+        result.putIfAbsent(keyOf(term), term);
+      }
+    }
+    return List.copyOf(result.values());
+  }
+
   public List<String> terms() {
     return List.copyOf(terms.values());
   }
