@@ -1,5 +1,6 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
+import com.alex.voicedevbot.domain.AudioKind;
 import java.util.List;
 import java.util.Objects;
 
@@ -9,12 +10,19 @@ import java.util.Objects;
  *
  * @param html Telegram HTML (foydalanuvchi matni allaqachon escape qilingan)
  * @param rows tugmalar qatorlari; bo'sh bo'lsa klaviatura yo'q
+ * @param attachments matndan oldin yuboriladigan audio'lar (masalan, jurnaldagi transkript
+ *     audio'si)
  */
-record Screen(String html, List<List<Button>> rows) {
+record Screen(String html, List<List<Button>> rows, List<Attachment> attachments) {
 
   Screen {
     Objects.requireNonNull(html, "html");
     rows = rows.stream().map(List::copyOf).toList();
+    attachments = List.copyOf(attachments);
+  }
+
+  Screen(String html, List<List<Button>> rows) {
+    this(html, rows, List.of());
   }
 
   static Screen text(String html) {
@@ -23,7 +31,7 @@ record Screen(String html, List<List<Button>> rows) {
 
   /** Ekran tepasiga qisqa xabar qo'shadi (masalan, "✅ Project qo'shildi"). */
   Screen withNotice(String noticeHtml) {
-    return new Screen(noticeHtml + "\n\n" + html, rows);
+    return new Screen(noticeHtml + "\n\n" + html, rows, attachments);
   }
 
   /**
@@ -34,6 +42,19 @@ record Screen(String html, List<List<Button>> rows) {
     Button {
       Objects.requireNonNull(label, "label");
       Objects.requireNonNull(action, "action");
+    }
+  }
+
+  /**
+   * Telegram'da allaqachon bor fayl — qayta yuklanmaydi, {@code file_id} bo'yicha yuboriladi.
+   *
+   * @param kind qaysi ko'rinishda yuborish (voice, video xabar va h.k.)
+   */
+  record Attachment(AudioKind kind, String fileId) {
+
+    Attachment {
+      Objects.requireNonNull(kind, "kind");
+      Objects.requireNonNull(fileId, "fileId");
     }
   }
 }

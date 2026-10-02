@@ -1,9 +1,16 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
+import com.alex.voicedevbot.adapter.in.telegram.Screen.Attachment;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.in.ProjectCommandResult.ProjectSummary;
+import com.alex.voicedevbot.application.port.in.TranscriptsResult;
+import com.alex.voicedevbot.domain.LoggedTranscript;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SpeechLanguage;
+import com.alex.voicedevbot.domain.TranscriptRecord;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -26,6 +33,10 @@ final class BotScreens {
 
   private static final int TERMS_PER_ROW = 2;
   private static final int MAX_TERM_BUTTONS = 90;
+  private static final int PREVIEW_LENGTH = 40;
+  private static final DateTimeFormatter LIST_TIME = DateTimeFormatter.ofPattern("dd.MM HH:mm");
+  private static final DateTimeFormatter FULL_TIME =
+      DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
   private BotScreens() {}
 
@@ -46,7 +57,96 @@ final class BotScreens {
                 new Button("📁 Projectlar", Actions.PROJECTS),
                 new Button("📖 Lug'at", Actions.GLOSSARY)),
             List.of(
-                new Button("🌐 Til", Actions.LANGUAGES), new Button("❓ Yordam", Actions.HELP))));
+                new Button("⚙️ Sozlamalar", Actions.SETTINGS),
+                new Button("❓ Yordam", Actions.HELP))));
+  }
+
+  static Screen settings(SpeechLanguage language) {
+    return new Screen(
+        "⚙️ <b>Sozlamalar</b>\n\n🌐 Nutq tili: " + languageLabel(language),
+        List.of(
+            List.of(new Button("🌐 Nutq tili", Actions.LANGUAGES)),
+            List.of(new Button("📝 Projectsiz transkriptlar", Actions.transcripts(null, 0))),
+            List.of(BACK_HOME)));
+  }
+
+  /** Project tugmasi bosilganda: project faol qilinadi va uning bo'limlari ko'rsatiladi. */
+  static Screen projectCard(ProjectSummary project) {
+    String key = project.name().key();
+    String html =
+        "📁 "
+            + Html.bold(project.name().value())
+            + " · ✅ faol\n📖 Lug'atda "
+            + project.termCount()
+            + " atama\n\nOvoz yuborsangiz, shu projectga yoziladi.";
+    return new Screen(
+        html,
+        List.of(
+            List.of(
+                new Button("📝 Transkriptlar", Actions.transcripts(key, 0)),
+                new Button("📖 Lug'at", Actions.GLOSSARY)),
+            List.of(
+                new Button("✅ Tasklar", Actions.soon(key)),
+                new Button("📄 Hujjatlar", Actions.soon(key))),
+            List.of(new Button("⬅️ Projectlar", Actions.PROJECTS))));
+  }
+
+  /**
+   * @param project {@code null} — projectsiz transkriptlar
+   */
+  static Screen transcripts(TranscriptsResult.Page page, ProjectName project, ZoneId zone) {
+    String key = project == null ? null : project.key();
+    String title =
+        project == null
+            ? "📝 <b>Projectsiz transkriptlar</b>"
+            : "📝 " + Html.bold(project.value()) + " — transkriptlar";
+    String body =
+        page.items().isEmpty()
+            ? "Hali transkript yo'q. Ovoz yuboring — shu yerda saqlanadi."
+            : "Eng yangisi tepada. Bosilsa — matn va audio.";
+    List<List<Button>> rows = new ArrayList<>();
+    for (LoggedTranscript item : page.items()) {
+      rows.add(
+          List.of(new Button(listLabel(item.record(), zone), Actions.openTranscript(item.id()))));
+    }
+    List<Button> navigation = new ArrayList<>();
+    if (page.page() > 0) {
+      navigation.add(new Button("◀️", Actions.transcripts(key, page.page() - 1)));
+    }
+    if (page.hasNext()) {
+      navigation.add(new Button("▶️", Actions.transcripts(key, page.page() + 1)));
+    }
+    if (!navigation.isEmpty()) {
+      rows.add(navigation);
+    }
+    String back = project == null ? Actions.SETTINGS : Actions.selectProject(key);
+    rows.add(List.of(new Button("⬅️ Orqaga", back)));
+    String pageNote = page.page() > 0 ? " · sahifa " + (page.page() + 1) : "";
+    return new Screen(title + pageNote + "\n\n" + body, rows);
+  }
+
+  static Screen transcriptEntry(LoggedTranscript entry, ZoneId zone) {
+    TranscriptRecord record = entry.record();
+    String project = record.project().map(name -> Html.escape(name.value())).orElse("projectsiz");
+    String html =
+        "📝 <b>Transkript #"
+            + entry.id()
+            + "</b>\n<i>🕒 "
+            + FULL_TIME.format(record.createdAt().atZone(zone))
+            + durationSuffix(record.audio().duration())
+            + "\n📁 "
+            + project
+            + " · 🌐 "
+            + record.language().code()
+            + "\n🤖 "
+            + Html.escape(record.transcription().model())
+            + "</i>\n\n"
+            + Html.escape(record.transcription().transcript().text());
+    String key = record.project().map(ProjectName::key).orElse(null);
+    return new Screen(
+        html,
+        List.of(List.of(new Button("⬅️ Ro'yxatga", Actions.transcripts(key, 0)))),
+        List.of(new Attachment(record.audio().kind(), record.audio().ref().id())));
   }
 
   static Screen projects(List<ProjectSummary> summaries) {
@@ -107,7 +207,7 @@ final class BotScreens {
                     new Button(
                         (code.equals(current.code()) ? "✅ " : "") + label,
                         Actions.setLanguage(code)))));
-    rows.add(List.of(BACK_HOME));
+    rows.add(List.of(new Button("⬅️ Orqaga", Actions.SETTINGS)));
     return new Screen(
         "🌐 <b>Nutq tili</b>\n\nQaysi tilda gapirasiz? Bot ovozni shu til bo'yicha taniydi.\n"
             + "<i>Qoraqalpoqcha uchun eng yaqini — qozoq.</i>",
@@ -124,7 +224,8 @@ final class BotScreens {
         (masalan: <code>ELT imzo</code>, <code>PVX</code>) shunda to'g'ri yoziladi.
         3️⃣ <b>Ovoz yuboring</b> — voice, audio fayl, video yoki dumaloq video (20 MB gacha).
 
-        🌐 Boshqa tilda gapirsangiz — 🌐 Til.
+        📝 Avvalgi transkriptlar — project kartochkasida (📁 Projectlar → project).
+        🌐 Boshqa tilda gapirsangiz — ⚙️ Sozlamalar → 🌐 Nutq tili.
 
         <b>Buyruqlar</b> (xohlasangiz):
         /start — bosh menyu
@@ -169,6 +270,24 @@ final class BotScreens {
         activeProject.isPresent() ? "📁 Projectni almashtirish" : "📁 Project tanlash";
     return new Screen(
         html, List.of(List.of(new Button(switchLabel, Actions.NEW_MESSAGE + Actions.PROJECTS))));
+  }
+
+  private static String listLabel(TranscriptRecord record, ZoneId zone) {
+    String text = record.transcription().transcript().text().replaceAll("\\s+", " ");
+    String preview =
+        text.length() <= PREVIEW_LENGTH ? text : text.substring(0, PREVIEW_LENGTH).strip() + "…";
+    return LIST_TIME.format(record.createdAt().atZone(zone))
+        + durationSuffix(record.audio().duration())
+        + " · "
+        + preview;
+  }
+
+  /** Davomiylik noma'lum bo'lsa (hujjat) ko'rsatilmaydi. */
+  private static String durationSuffix(Duration duration) {
+    if (duration.isZero()) {
+      return "";
+    }
+    return " · %d:%02d".formatted(duration.toMinutes(), duration.toSecondsPart());
   }
 
   static String languageLabel(SpeechLanguage language) {

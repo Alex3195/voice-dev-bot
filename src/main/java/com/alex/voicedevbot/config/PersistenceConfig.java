@@ -1,8 +1,10 @@
 package com.alex.voicedevbot.config;
 
 import com.alex.voicedevbot.adapter.out.persistence.JdbcProjectRepository;
+import com.alex.voicedevbot.adapter.out.persistence.JdbcTranscriptionLog;
 import com.alex.voicedevbot.adapter.out.persistence.JdbcUserSettingsRepository;
 import com.alex.voicedevbot.application.port.out.ProjectRepository;
+import com.alex.voicedevbot.application.port.out.TranscriptionLog;
 import com.alex.voicedevbot.application.port.out.UserSettingsRepository;
 import javax.sql.DataSource;
 import org.springframework.context.annotation.Bean;
@@ -20,5 +22,10 @@ class PersistenceConfig {
   @Bean
   UserSettingsRepository userSettingsRepository(DataSource dataSource) {
     return new JdbcUserSettingsRepository(dataSource);
+  }
+
+  @Bean
+  TranscriptionLog transcriptionLog(DataSource dataSource) {
+    return new JdbcTranscriptionLog(dataSource);
   }
 }

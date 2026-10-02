@@ -43,3 +43,6 @@ out/
 # Whisper model fayllari (katta, repo'ga kirmaydi)
 models/
 whisper-server-*.wav
+
+# Audio arxivi (AUDIO_ARCHIVE_DIR)
+data/

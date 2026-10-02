@@ -4,6 +4,7 @@ import com.alex.voicedevbot.application.port.out.SpeechToText;
 import com.alex.voicedevbot.application.port.out.TranscriptionException;
 import com.alex.voicedevbot.domain.AudioClip;
 import com.alex.voicedevbot.domain.Transcript;
+import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.TranscriptionHints;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,6 +26,7 @@ import java.util.UUID;
 public class WhisperCppSpeechToText implements SpeechToText {
 
   static final String INFERENCE_PATH = "/inference";
+  static final String ENGINE = "whisper.cpp";
   private static final String RESPONSE_FORMAT = "text";
   private static final String CRLF = "\r\n";
   private static final int HTTP_OK = 200;
@@ -40,9 +42,13 @@ public class WhisperCppSpeechToText implements SpeechToText {
   }
 
   @Override
-  public Transcript transcribe(AudioClip audio, TranscriptionHints hints) {
+  public Transcription transcribe(AudioClip audio, TranscriptionHints hints) {
+    String prompt = WhisperPrompt.build(hints, settings.basePrompts());
     try {
-      return new Transcript(requestTranscript(audio, hints));
+      return new Transcription(
+          new Transcript(requestTranscript(audio, hints.language().code(), prompt)),
+          prompt,
+          ENGINE + " " + settings.model());
     } catch (IOException e) {
       throw new TranscriptionException(failureMessage(audio), e);
     } catch (InterruptedException e) {
@@ -51,14 +57,16 @@ public class WhisperCppSpeechToText implements SpeechToText {
     }
   }
 
-  private String requestTranscript(AudioClip audio, TranscriptionHints hints)
+  private String requestTranscript(AudioClip audio, String language, String prompt)
       throws IOException, InterruptedException {
     String boundary = "voice-dev-bot-" + UUID.randomUUID();
     HttpRequest request =
         HttpRequest.newBuilder(inferenceUri)
             .timeout(settings.timeout())
             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-            .POST(HttpRequest.BodyPublishers.ofByteArray(multipartBody(audio, hints, boundary)))
+            .POST(
+                HttpRequest.BodyPublishers.ofByteArray(
+                    multipartBody(audio, language, prompt, boundary)))
             .build();
     HttpResponse<String> response =
         httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -71,11 +79,10 @@ public class WhisperCppSpeechToText implements SpeechToText {
     return response.body();
   }
 
-  private byte[] multipartBody(AudioClip audio, TranscriptionHints hints, String boundary)
+  private byte[] multipartBody(AudioClip audio, String language, String prompt, String boundary)
       throws IOException {
     ByteArrayOutputStream body = new ByteArrayOutputStream();
-    writeTextPart(body, boundary, "language", hints.language().code());
-    String prompt = WhisperPrompt.build(hints, settings.basePrompts());
+    writeTextPart(body, boundary, "language", language);
     if (!prompt.isEmpty()) {
       writeTextPart(body, boundary, "prompt", prompt);
     }

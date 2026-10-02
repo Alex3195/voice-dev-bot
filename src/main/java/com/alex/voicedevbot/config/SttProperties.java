@@ -29,12 +29,14 @@ public record SttProperties(
 
   /**
    * @param url whisper-server manzili: dev'da native, serverda Docker (Tailscale orqali)
+   * @param model serverda yuklangan model nomi — jurnal uchun (server uni javobda aytmaydi)
    * @param basePrompts til kodi → namuna matn; Whisper shu uslubda (masalan, lotin yozuvida) yozadi
    * @param timeout bitta audio'ni matnga aylantirish uchun maksimal vaqt (uzun fayllar minutlab
    *     ketadi)
    */
   public record Whisper(
       @NotNull @DefaultValue("http://127.0.0.1:8178") URI url,
+      @NotBlank @DefaultValue("ggml-large-v3-q5_0") String model,
       Map<String, String> basePrompts,
       @NotNull @DefaultValue("15m") Duration timeout) {
 

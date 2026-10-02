@@ -11,12 +11,14 @@ class StubSpeechToTextTest {
 
   @Test
   void should_describe_audio_when_transcribing() {
-    var transcript =
+    var transcription =
         new StubSpeechToText()
             .transcribe(
                 new AudioClip(new byte[3], "audio/ogg"),
                 TranscriptionHints.languageOnly(new SpeechLanguage("uz")));
 
-    assertThat(transcript.text()).contains("3 bayt").contains("audio/ogg");
+    assertThat(transcription.transcript().text()).contains("3 bayt").contains("audio/ogg");
+    assertThat(transcription.model()).isEqualTo("stub");
+    assertThat(transcription.prompt()).isEmpty();
   }
 }

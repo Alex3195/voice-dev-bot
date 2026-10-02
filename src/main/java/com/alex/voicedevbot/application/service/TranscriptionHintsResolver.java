@@ -20,8 +20,11 @@ public class TranscriptionHintsResolver {
     this.projects = Objects.requireNonNull(projects, "projects");
   }
 
-  public TranscriptionHints resolve(TelegramUserId user) {
-    UserSettings current = settings.current(user);
+  public UserSettings settingsOf(TelegramUserId user) {
+    return settings.current(user);
+  }
+
+  public TranscriptionHints resolve(UserSettings current) {
     List<String> vocabulary =
         current
             .activeProject()

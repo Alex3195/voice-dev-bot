@@ -1,5 +1,6 @@
 package com.alex.voicedevbot.adapter.in.telegram;
 
+import com.alex.voicedevbot.application.port.in.BrowseTranscriptsUseCase;
 import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.GlossaryCommandResult;
 import com.alex.voicedevbot.application.port.in.LanguageCommandResult;
@@ -7,9 +8,12 @@ import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
 import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.in.ProjectCommandResult;
 import com.alex.voicedevbot.application.port.in.ProjectCommandResult.ProjectSummary;
+import com.alex.voicedevbot.application.port.in.TranscriptsResult;
 import com.alex.voicedevbot.domain.ProjectName;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.TelegramUserId;
+import com.alex.voicedevbot.domain.TranscriptFilter;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +21,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Foydalanuvchi bilan muloqot: buyruqlar, inline tugmalar va bot so'ragan matn (project nomi,
@@ -34,10 +40,18 @@ public class BotConversation {
           new BotMenuItem("start", "🏠 Bosh menyu"),
           new BotMenuItem("project", "📁 Projectlar"),
           new BotMenuItem("glossary", "📖 Faol project lug'ati"),
+          new BotMenuItem("settings", "⚙️ Sozlamalar"),
           new BotMenuItem("lang", "🌐 Nutq tili"),
           new BotMenuItem("help", "❓ Yordam"));
 
   static final String INVALID_INPUT = "⚠️ Noto'g'ri qiymat, qaytadan urinib ko'ring.";
+  static final String SOON_TOAST = "⏳ Tez orada";
+  static final String PROJECT_NOT_FOUND = "Project topilmadi";
+
+  /** {@code <project id yoki "-">:<sahifa>} — {@link Actions#transcripts}. */
+  private static final Pattern TRANSCRIPTS_ARGUMENT = Pattern.compile("([0-9a-f]+|-):(\\d{1,6})");
+
+  private static final Pattern TRANSCRIPT_ID = Pattern.compile("\\d{1,18}");
 
   enum Pending {
     PROJECT_NAME,
@@ -47,15 +61,24 @@ public class BotConversation {
   private final ManageProjectsUseCase projects;
   private final ManageGlossaryUseCase glossary;
   private final ChangeLanguageUseCase language;
+  private final BrowseTranscriptsUseCase transcripts;
+  private final ZoneId zone;
   private final Map<TelegramUserId, Pending> pending = new ConcurrentHashMap<>();
 
+  /**
+   * @param zone transkript vaqtlari qaysi vaqt mintaqasida ko'rsatiladi
+   */
   public BotConversation(
       ManageProjectsUseCase projects,
       ManageGlossaryUseCase glossary,
-      ChangeLanguageUseCase language) {
+      ChangeLanguageUseCase language,
+      BrowseTranscriptsUseCase transcripts,
+      ZoneId zone) {
     this.projects = Objects.requireNonNull(projects, "projects");
     this.glossary = Objects.requireNonNull(glossary, "glossary");
     this.language = Objects.requireNonNull(language, "language");
+    this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
+    this.zone = Objects.requireNonNull(zone, "zone");
   }
 
   /** Matnli xabar: buyruq, bot so'ragan qiymat yoki oddiy matn (bosh menyu ko'rsatiladi). */
@@ -88,6 +111,16 @@ public class BotConversation {
     if (action.startsWith(Actions.SET_LANGUAGE)) {
       return changeLanguage(user, action.substring(Actions.SET_LANGUAGE.length()));
     }
+    if (action.startsWith(Actions.SOON)) {
+      return selectProjectById(user, action.substring(Actions.SOON.length()))
+          .map(reply -> new Reply(reply.screen(), false, SOON_TOAST));
+    }
+    if (action.startsWith(Actions.TRANSCRIPTS)) {
+      return listTranscripts(user, action.substring(Actions.TRANSCRIPTS.length()));
+    }
+    if (action.startsWith(Actions.OPEN_TRANSCRIPT)) {
+      return openTranscript(user, action.substring(Actions.OPEN_TRANSCRIPT.length()));
+    }
     return screenFor(user, action).map(screen -> new Reply(screen, asNewMessage, ""));
   }
 
@@ -113,6 +146,8 @@ public class BotConversation {
       case Actions.ADD_TERMS -> askTerms(user);
       case Actions.LANGUAGES ->
           context(user).map(context -> BotScreens.languages(context.language()));
+      case Actions.SETTINGS ->
+          context(user).map(context -> BotScreens.settings(context.language()));
       default -> Optional.empty();
     };
   }
@@ -122,6 +157,7 @@ public class BotConversation {
     return switch (command.name()) {
       case "start" -> home(user);
       case "help" -> screenFor(user, Actions.HELP);
+      case "settings" -> screenFor(user, Actions.SETTINGS);
       case "project" ->
           argument.isEmpty() ? projectsScreen(user) : selectByName(user, new ProjectName(argument));
       case "addproject" ->
@@ -198,14 +234,60 @@ public class BotConversation {
     };
   }
 
+  /** Project kartochkasi: bosilgan project faol qilinadi. */
   private Optional<Reply> selectProjectById(TelegramUserId user, String id) {
     Optional<ProjectName> name = context(user).flatMap(context -> findById(context.projects(), id));
     if (name.isEmpty()) {
-      return projectsScreen(user).map(s -> new Reply(s, false, "Project topilmadi"));
+      return projectsScreen(user).map(s -> new Reply(s, false, PROJECT_NOT_FOUND));
     }
     projects.selectProject(user, name.get());
-    return projectsScreen(user)
-        .map(s -> new Reply(s, false, "✅ Faol project: " + name.get().value()));
+    return context(user)
+        .flatMap(context -> context.projects().stream().filter(ProjectSummary::active).findFirst())
+        .map(BotScreens::projectCard)
+        .map(card -> new Reply(card, false, ""));
+  }
+
+  private Optional<Reply> listTranscripts(TelegramUserId user, String argument) {
+    Matcher matcher = TRANSCRIPTS_ARGUMENT.matcher(argument);
+    if (!matcher.matches()) {
+      return Optional.empty();
+    }
+    String scope = matcher.group(1);
+    int page = Integer.parseInt(matcher.group(2));
+    Optional<ProjectName> project = Optional.empty();
+    if (!scope.equals(Actions.WITHOUT_PROJECT)) {
+      Optional<Context> context = context(user);
+      if (context.isEmpty()) {
+        return Optional.empty();
+      }
+      project = findById(context.get().projects(), scope);
+      if (project.isEmpty()) {
+        return projectsScreen(user).map(s -> new Reply(s, false, PROJECT_NOT_FOUND));
+      }
+    }
+    TranscriptFilter filter =
+        project
+            .<TranscriptFilter>map(TranscriptFilter.OfProject::new)
+            .orElseGet(TranscriptFilter.WithoutProject::new);
+    if (!(transcripts.list(user, filter, page) instanceof TranscriptsResult.Page result)) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new Reply(BotScreens.transcripts(result, project.orElse(null), zone), false, ""));
+  }
+
+  private Optional<Reply> openTranscript(TelegramUserId user, String id) {
+    if (!TRANSCRIPT_ID.matcher(id).matches()) {
+      return Optional.empty();
+    }
+    return switch (transcripts.open(user, Long.parseLong(id))) {
+      case TranscriptsResult.Opened(var entry) ->
+          Optional.of(new Reply(BotScreens.transcriptEntry(entry, zone), true, ""));
+      case TranscriptsResult.NotFound() ->
+          home(user).map(s -> new Reply(s, true, "Transkript topilmadi"));
+      case TranscriptsResult.Page ignored -> Optional.empty();
+      case TranscriptsResult.AccessDenied() -> Optional.empty();
+    };
   }
 
   private Optional<Screen> askTerms(TelegramUserId user) {

@@ -25,6 +25,13 @@ final class Actions {
   static final String LANGUAGES = "lang";
   static final String SET_LANGUAGE = "lang:";
   static final String CANCEL = "cancel";
+  static final String SETTINGS = "settings";
+  static final String SOON = "soon:";
+  static final String TRANSCRIPTS = "tr:";
+  static final String OPEN_TRANSCRIPT = "tro:";
+
+  /** {@link #transcripts} da projectsiz transkriptlar uchun project o'rnidagi belgi. */
+  static final String WITHOUT_PROJECT = "-";
 
   private Actions() {}
 
@@ -38,6 +45,23 @@ final class Actions {
 
   static String setLanguage(String code) {
     return SET_LANGUAGE + code;
+  }
+
+  /** Hali tayyor bo'lmagan bo'lim: project kartochkasi qayta ko'rsatiladi. */
+  static String soon(String projectKey) {
+    return SOON + idOf(projectKey);
+  }
+
+  /**
+   * @param projectKey {@code null} — projectsiz transkriptlar
+   */
+  static String transcripts(String projectKey, int page) {
+    String scope = projectKey == null ? WITHOUT_PROJECT : idOf(projectKey);
+    return TRANSCRIPTS + scope + ":" + page;
+  }
+
+  static String openTranscript(long id) {
+    return NEW_MESSAGE + OPEN_TRANSCRIPT + id;
   }
 
   static String idOf(String key) {
