@@ -62,6 +62,7 @@ public class BotConversation {
   private final ManageGlossaryUseCase glossary;
   private final ChangeLanguageUseCase language;
   private final BrowseTranscriptsUseCase transcripts;
+  private final GitLabDialog gitLab;
   private final ZoneId zone;
   private final Map<TelegramUserId, Pending> pending = new ConcurrentHashMap<>();
 
@@ -73,16 +74,22 @@ public class BotConversation {
       ManageGlossaryUseCase glossary,
       ChangeLanguageUseCase language,
       BrowseTranscriptsUseCase transcripts,
+      GitLabDialog gitLab,
       ZoneId zone) {
     this.projects = Objects.requireNonNull(projects, "projects");
     this.glossary = Objects.requireNonNull(glossary, "glossary");
     this.language = Objects.requireNonNull(language, "language");
     this.transcripts = Objects.requireNonNull(transcripts, "transcripts");
+    this.gitLab = Objects.requireNonNull(gitLab, "gitLab");
     this.zone = Objects.requireNonNull(zone, "zone");
   }
 
   /** Matnli xabar: buyruq, bot so'ragan qiymat yoki oddiy matn (bosh menyu ko'rsatiladi). */
   Optional<Screen> onText(TelegramUserId user, String text) {
+    if (!isCommand(text) && gitLab.awaitsInput(user)) {
+      return gitLab.onText(user, text);
+    }
+    gitLab.cancel(user);
     Pending awaited = pending.remove(user);
     try {
       if (isCommand(text)) {
@@ -100,6 +107,7 @@ public class BotConversation {
   /** Inline tugma bosildi. */
   Optional<Reply> onButton(TelegramUserId user, String data) {
     pending.remove(user);
+    gitLab.cancel(user);
     boolean asNewMessage = data.startsWith(Actions.NEW_MESSAGE);
     String action = asNewMessage ? data.substring(Actions.NEW_MESSAGE.length()) : data;
     if (action.startsWith(Actions.SELECT_PROJECT) && !action.equals(Actions.NEW_PROJECT)) {
@@ -110,6 +118,9 @@ public class BotConversation {
     }
     if (action.startsWith(Actions.SET_LANGUAGE)) {
       return changeLanguage(user, action.substring(Actions.SET_LANGUAGE.length()));
+    }
+    if (action.equals(Actions.GITLAB) || action.startsWith(Actions.GITLAB_PREFIX)) {
+      return gitLab.onButton(user, action);
     }
     if (action.startsWith(Actions.SOON)) {
       return selectProjectById(user, action.substring(Actions.SOON.length()))
@@ -122,6 +133,11 @@ public class BotConversation {
       return openTranscript(user, action.substring(Actions.OPEN_TRANSCRIPT.length()));
     }
     return screenFor(user, action).map(screen -> new Reply(screen, asNewMessage, ""));
+  }
+
+  /** Bot token kutyapti — foydalanuvchi yozgan xabar chatdan o'chirilishi kerak. */
+  boolean expectsSecret(TelegramUserId user) {
+    return gitLab.expectsSecret(user);
   }
 
   /** Transkript ostida faol project va til; foydalanuvchi allaqachon whitelist'dan o'tgan. */
@@ -212,7 +228,7 @@ public class BotConversation {
     return switch (projects.addProject(user, name)) {
       case ProjectCommandResult.Added(var added) ->
           Optional.of(
-              BotScreens.glossary(added, List.of())
+              BotScreens.withRepoOffer(BotScreens.glossary(added, List.of()))
                   .withNotice("✅ Project qo'shildi va faol qilindi: " + Html.bold(added.value())));
       case ProjectCommandResult.AlreadyExists(var existing) ->
           projectsScreen(user)
@@ -243,7 +259,7 @@ public class BotConversation {
     projects.selectProject(user, name.get());
     return context(user)
         .flatMap(context -> context.projects().stream().filter(ProjectSummary::active).findFirst())
-        .map(BotScreens::projectCard)
+        .map(summary -> BotScreens.projectCard(summary, gitLab.repoButton(user)))
         .map(card -> new Reply(card, false, ""));
   }
 

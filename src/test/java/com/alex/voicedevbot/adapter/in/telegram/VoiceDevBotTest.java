@@ -40,6 +40,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
 import org.telegram.telegrambots.meta.api.methods.send.SendVoice;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Document;
@@ -180,6 +181,51 @@ class VoiceDevBotTest {
     bot.consume(textUpdate("salom"));
 
     verify(telegramClient).execute(any(SendMessage.class));
+  }
+
+  @Test
+  void should_delete_message_with_token_after_handling_it() throws TelegramApiException {
+    when(conversation.expectsSecret(USER)).thenReturn(true);
+    when(conversation.onText(USER, "glpat-secret")).thenReturn(Optional.of(MENU_SCREEN));
+    Update update = textUpdate("glpat-secret");
+    update.getMessage().setMessageId(MESSAGE_ID);
+
+    bot.consume(update);
+
+    ArgumentCaptor<DeleteMessage> delete = ArgumentCaptor.forClass(DeleteMessage.class);
+    verify(telegramClient).execute(delete.capture());
+    assertThat(delete.getValue().getChatId()).isEqualTo(String.valueOf(CHAT_ID));
+    assertThat(delete.getValue().getMessageId()).isEqualTo(MESSAGE_ID);
+  }
+
+  @Test
+  void should_ask_user_to_delete_token_message_when_bot_cannot() throws TelegramApiException {
+    when(conversation.expectsSecret(USER)).thenReturn(true);
+    when(conversation.onText(any(), any())).thenReturn(Optional.empty());
+    when(telegramClient.execute(any(DeleteMessage.class)))
+        .thenThrow(new TelegramApiException("message can't be deleted"));
+    Update update = textUpdate("glpat-secret");
+    update.getMessage().setMessageId(MESSAGE_ID);
+
+    bot.consume(update);
+
+    assertThat(sentMessage().getText()).isEqualTo(VoiceDevBot.SECRET_NOT_DELETED_REPLY);
+  }
+
+  @Test
+  void should_not_delete_ordinary_text() throws TelegramApiException {
+    when(conversation.onText(any(), any())).thenReturn(Optional.empty());
+
+    bot.consume(textUpdate("salom"));
+
+    verify(telegramClient, never()).execute(any(DeleteMessage.class));
+  }
+
+  @Test
+  void should_notify_user_in_private_chat() throws TelegramApiException {
+    bot.notify(USER, MENU_SCREEN);
+
+    assertThat(sentMessage().getChatId()).isEqualTo(String.valueOf(USER_ID));
   }
 
   @Test

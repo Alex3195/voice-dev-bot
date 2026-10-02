@@ -29,6 +29,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	runtimeOnly("org.postgresql:postgresql")
+	implementation("tools.jackson.core:jackson-databind")
 	implementation("org.telegram:telegrambots-longpolling:$telegramBotsVersion")
 	implementation("org.telegram:telegrambots-client:$telegramBotsVersion")
 	annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")

@@ -21,6 +21,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
 import org.telegram.telegrambots.meta.api.methods.send.SendVoice;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -44,6 +45,9 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
       "⚠️ Amalni bajarib bo'lmadi, keyinroq urinib ko'ring.";
   static final String TOO_LARGE_REPLY =
       "⚠️ Fayl juda katta (%d MB). Telegram bot %d MB gacha faylni yuklab ola oladi.";
+
+  static final String SECRET_NOT_DELETED_REPLY =
+      "⚠️ Token yozilgan xabarni o'chirib bo'lmadi — uni o'zingiz o'chiring.";
 
   private static final long BYTES_IN_MB = 1024 * 1024;
 
@@ -97,6 +101,7 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
 
   private void handleText(Message message) {
     TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
+    boolean secret = conversation.expectsSecret(sender);
     try {
       conversation
           .onText(sender, message.getText())
@@ -104,6 +109,25 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
     } catch (StorageException e) {
       log.error("Failed to handle text message in chat {}", message.getChatId(), e);
       send(message.getChatId(), Screen.text(COMMAND_FAILURE_REPLY));
+    } finally {
+      if (secret) {
+        delete(message.getChatId(), message.getMessageId());
+      }
+    }
+  }
+
+  /** Bot tomonidan boshlangan xabar (masalan, token ogohlantirishi) — shaxsiy chatga. */
+  void notify(TelegramUserId user, Screen screen) {
+    send(user.value(), screen);
+  }
+
+  /** Token yozilgan xabar chatda qolmasligi kerak; o'chirib bo'lmasa — ogohlantirish. */
+  private void delete(Long chatId, Integer messageId) {
+    try {
+      telegramClient.execute(new DeleteMessage(chatId.toString(), messageId));
+    } catch (TelegramApiException e) {
+      log.warn("Failed to delete secret message {} in chat {}", messageId, chatId, e);
+      send(chatId, Screen.text(SECRET_NOT_DELETED_REPLY));
     }
   }
 

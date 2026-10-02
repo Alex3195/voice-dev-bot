@@ -1,0 +1,121 @@
+package com.alex.voicedevbot.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.net.URI;
+import java.time.LocalDate;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class GitLabDomainTest {
+
+  private static final LocalDate TODAY = LocalDate.of(2026, 10, 2);
+
+  @Test
+  void should_mask_token_everywhere_it_can_be_printed() {
+    GitLabToken token = new GitLabToken(" glpat-AbCdEfGh1234a1b2 ");
+
+    assertThat(token.value()).isEqualTo("glpat-AbCdEfGh1234a1b2");
+    assertThat(token.masked()).isEqualTo("glpat-…a1b2");
+    assertThat(token.toString()).isEqualTo("GitLabToken[glpat-…a1b2]").doesNotContain("AbCd");
+    assertThat(new GitLabToken("abcdefgh1234").masked()).isEqualTo("…1234");
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"", "short", "has space inside", "glpat-ab\ncd1234"})
+  void should_reject_token_with_invalid_format(String value) {
+    assertThatThrownBy(() -> new GitLabToken(value)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "gitlab.com, https://gitlab.com, gitlab.com",
+    "https://gitlab.com/, https://gitlab.com, gitlab.com",
+    "http://100.64.0.5:8080/gitlab//, http://100.64.0.5:8080/gitlab, 100.64.0.5:8080/gitlab",
+    "  git.example.uz , https://git.example.uz, git.example.uz"
+  })
+  void should_normalize_gitlab_address(String input, String uri, String label) {
+    GitLabAddress address = GitLabAddress.parse(input);
+
+    assertThat(address.uri()).isEqualTo(URI.create(uri));
+    assertThat(address.label()).isEqualTo(label);
+    assertThat(address.api("/user")).isEqualTo(URI.create(uri + "/api/v4/user"));
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(
+      strings = {
+        "",
+        "ftp://gitlab.com",
+        "https://user:pass@gitlab.com",
+        "https://x?y=1",
+        "http://"
+      })
+  void should_reject_invalid_gitlab_address(String input) {
+    assertThatThrownBy(() -> GitLabAddress.parse(input))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "2026-12-01, ACTIVE",
+    "2026-10-10, ACTIVE",
+    "2026-10-09, EXPIRING_SOON",
+    "2026-10-03, EXPIRING_SOON",
+    "2026-10-02, EXPIRED",
+    "2026-09-01, EXPIRED"
+  })
+  void should_tell_token_status_by_expiry_date(LocalDate expiresAt, TokenStatus status) {
+    TokenInfo info = TokenInfo.expiring("alex", Set.of("api"), expiresAt);
+
+    assertThat(info.status(TODAY)).isEqualTo(status);
+  }
+
+  @Test
+  void should_treat_token_without_expiry_as_active() {
+    TokenInfo info = TokenInfo.withoutExpiry("alex", Set.of("read_api"));
+
+    assertThat(info.status(TODAY)).isEqualTo(TokenStatus.ACTIVE);
+    assertThat(info.expiresAt()).isEmpty();
+    assertThat(info.hasRequiredScope()).isFalse();
+    assertThat(TokenInfo.withoutExpiry("alex", Set.of("api", "read_user")).hasRequiredScope())
+        .isTrue();
+  }
+
+  @Test
+  void should_compare_token_info_by_value() {
+    TokenInfo info = TokenInfo.expiring("alex", Set.of("api"), TODAY);
+
+    assertThat(info)
+        .isEqualTo(TokenInfo.expiring("alex", Set.of("api"), TODAY))
+        .hasSameHashCodeAs(TokenInfo.expiring("alex", Set.of("api"), TODAY))
+        .isNotEqualTo(TokenInfo.withoutExpiry("alex", Set.of("api")));
+    assertThat(info.toString()).contains("alex").contains("2026-10-02");
+    assertThatThrownBy(() -> TokenInfo.withoutExpiry(" ", Set.of()))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void should_label_connection_and_reject_blank_repo_or_namespace() {
+    GitLabConnection connection =
+        new GitLabConnection(
+            1,
+            GitLabAddress.GITLAB_COM,
+            new GitLabToken("glpat-12345678"),
+            TokenInfo.withoutExpiry("alex", Set.of("api")));
+
+    assertThat(connection.label()).isEqualTo("gitlab.com · @alex");
+    assertThat(connection.status(TODAY)).isEqualTo(TokenStatus.ACTIVE);
+    assertThatThrownBy(() -> new GitLabRepo(1, " ", URI.create("https://gitlab.com/x")))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new GitLabNamespace(1, "", true))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+}

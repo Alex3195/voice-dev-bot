@@ -32,3 +32,7 @@ stt:
 journal:
   # Audio arxivi: <dir>/<yyyy-mm-dd>/<id>.<ext>, muddatsiz saqlanadi
   audio-dir: ${AUDIO_ARCHIVE_DIR:data/audio}
+
+secrets:
+  # GitLab tokenlarini shifrlash kaliti (AES-256-GCM): openssl rand -base64 32
+  key: ${SECRETS_KEY:}

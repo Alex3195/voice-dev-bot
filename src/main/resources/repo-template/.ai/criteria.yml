@@ -1,0 +1,8 @@
+# Mashina o'qiydigan talablar: voice-dev-bot task yaratishda, agent kod yozishda shularga tayanadi.
+stack: # masalan: java-spring, node, flutter
+coverage_min: 80
+required_tests: [unit, integration]
+qa: [smoke]
+ci: [build, test, lint]
+verify_command: # masalan: ./gradlew check
+deploy: {staging: auto, prod: manual-approval}
