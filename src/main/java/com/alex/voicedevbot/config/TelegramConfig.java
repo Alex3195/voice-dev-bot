@@ -68,7 +68,10 @@ class TelegramConfig {
       TelegramBotsLongPollingApplication application,
       BotProperties properties,
       VoiceDevBot voiceDevBot) {
-    return args -> application.registerBot(properties.token(), voiceDevBot);
+    return args -> {
+      application.registerBot(properties.token(), voiceDevBot);
+      voiceDevBot.publishCommandMenu();
+    };
   }
 
   private static int portOf(URI uri) {

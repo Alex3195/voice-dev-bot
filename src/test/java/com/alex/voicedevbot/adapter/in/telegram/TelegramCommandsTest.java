@@ -48,7 +48,10 @@ class TelegramCommandsTest {
 
     assertThat(commands.handle(USER, text))
         .hasValueSatisfying(
-            reply -> assertThat(reply).contains("/glossary add").endsWith("Hozirgi til: uz"));
+            reply ->
+                assertThat(reply)
+                    .contains("/glossary add &lt;atama&gt;")
+                    .contains("<b>Nutq tili:</b> <code>uz</code>"));
   }
 
   @Test
@@ -63,12 +66,16 @@ class TelegramCommandsTest {
     when(projects.addProject(USER, ELT_IMZO)).thenReturn(new ProjectCommandResult.Added(ELT_IMZO));
 
     assertThat(commands.handle(USER, "/addproject   ELT imzo "))
-        .contains("Project qo'shildi va faol qilindi: ELT imzo");
+        .hasValueSatisfying(
+            reply ->
+                assertThat(reply)
+                    .startsWith("✅ Project qo'shildi va faol qilindi: <b>ELT imzo</b>"));
   }
 
   @Test
   void should_explain_usage_when_project_name_is_missing() {
-    assertThat(commands.handle(USER, "/addproject")).contains("Foydalanish: /addproject <nom>");
+    assertThat(commands.handle(USER, "/addproject"))
+        .contains("ℹ️ Foydalanish: /addproject &lt;nom&gt;");
     verifyNoInteractions(projects);
   }
 
@@ -83,11 +90,15 @@ class TelegramCommandsTest {
                     new ProjectSummary(ELT_IMZO, 3, true),
                     new ProjectSummary(new ProjectName("Finbank"), 0, false))));
 
-    assertThat(commands.handle(USER, "/project ELT imzo")).contains("Faol project: ELT imzo");
+    assertThat(commands.handle(USER, "/project ELT imzo"))
+        .contains("▶️ Faol project: <b>ELT imzo</b>");
     assertThat(commands.handle(USER, "/project"))
         .hasValueSatisfying(
             reply ->
-                assertThat(reply).contains("▶ ELT imzo — 3 atama").contains("• Finbank — 0 atama"));
+                assertThat(reply)
+                    .startsWith("📁 <b>Projectlar</b>")
+                    .contains("▶️ <b>ELT imzo</b> — 3 atama")
+                    .contains("▫️ Finbank — 0 atama"));
   }
 
   @Test
@@ -120,7 +131,9 @@ class TelegramCommandsTest {
             new GlossaryCommandResult.Shown(ELT_IMZO, List.of("kassa bo'limi", "Klaes", "PVX")));
 
     assertThat(commands.handle(USER, "/glossary add kassa bo'limi, Klaes ,PVX,"))
-        .contains("ELT imzo lug'ati (3):\nkassa bo'limi, Klaes, PVX");
+        .contains(
+            "📖 <b>ELT imzo</b> lug'ati — 3 atama\n\n"
+                + "<code>kassa bo'limi</code> · <code>Klaes</code> · <code>PVX</code>");
   }
 
   @Test
@@ -133,7 +146,7 @@ class TelegramCommandsTest {
     assertThat(commands.handle(USER, "/glossary"))
         .hasValueSatisfying(reply -> assertThat(reply).contains("lug'ati bo'sh"));
     assertThat(commands.handle(USER, "/glossary remove Klaes"))
-        .hasValueSatisfying(reply -> assertThat(reply).startsWith("Avval project tanlang"));
+        .hasValueSatisfying(reply -> assertThat(reply).startsWith("⚠️ Avval project tanlang"));
   }
 
   @Test
@@ -151,8 +164,9 @@ class TelegramCommandsTest {
         .thenReturn(new LanguageCommandResult.Changed(kazakh));
 
     assertThat(commands.handle(USER, "/lang"))
-        .hasValueSatisfying(reply -> assertThat(reply).startsWith("Nutq tili: uz"));
-    assertThat(commands.handle(USER, "/lang KK")).contains("Nutq tili o'zgardi: kk");
+        .hasValueSatisfying(
+            reply -> assertThat(reply).startsWith("🌐 <b>Nutq tili:</b> <code>uz</code>"));
+    assertThat(commands.handle(USER, "/lang KK")).contains("✅ Nutq tili o'zgardi: <code>kk</code>");
   }
 
   @Test
@@ -169,6 +183,33 @@ class TelegramCommandsTest {
     when(glossary.addTerms(USER, List.of())).thenThrow(new IllegalArgumentException("empty"));
 
     assertThat(commands.handle(USER, text)).contains(TelegramCommands.INVALID_INPUT);
+  }
+
+  @Test
+  void should_escape_user_text_in_html_replies() {
+    ProjectName tricky = new ProjectName("A<b>&C");
+    when(projects.selectProject(USER, tricky))
+        .thenReturn(new ProjectCommandResult.Selected(tricky));
+    when(glossary.showGlossary(USER))
+        .thenReturn(new GlossaryCommandResult.Shown(tricky, List.of("<script>")));
+
+    assertThat(commands.handle(USER, "/project A<b>&C"))
+        .contains("▶️ Faol project: <b>A&lt;b&gt;&amp;C</b>");
+    assertThat(commands.handle(USER, "/glossary"))
+        .hasValueSatisfying(reply -> assertThat(reply).contains("<code>&lt;script&gt;</code>"));
+  }
+
+  @Test
+  void should_offer_menu_with_every_handled_command() {
+    when(language.currentLanguage(USER)).thenReturn(new LanguageCommandResult.Current(UZ));
+    when(projects.listProjects(USER)).thenReturn(new ProjectCommandResult.Listed(List.of()));
+    when(glossary.showGlossary(USER)).thenReturn(new GlossaryCommandResult.NoActiveProject());
+
+    assertThat(TelegramCommands.MENU)
+        .extracting(TelegramCommands.BotMenuItem::command)
+        .containsExactly("help", "project", "addproject", "glossary", "lang");
+    assertThat(TelegramCommands.MENU)
+        .allSatisfy(item -> assertThat(commands.handle(USER, "/" + item.command())).isPresent());
   }
 
   @Test

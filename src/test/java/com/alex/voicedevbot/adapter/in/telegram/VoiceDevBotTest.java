@@ -23,12 +23,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.telegram.telegrambots.meta.api.methods.ParseMode;
+import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.Voice;
 import org.telegram.telegrambots.meta.api.objects.chat.Chat;
+import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -57,7 +60,8 @@ class VoiceDevBotTest {
         .handle(
             new VoiceMessage(new TelegramUserId(USER_ID), new AudioRef("file-id", "audio/ogg")));
     assertThat(sentMessage().getChatId()).isEqualTo(String.valueOf(CHAT_ID));
-    assertThat(sentMessage().getText()).isEqualTo("Matn:\n\nyangi task");
+    assertThat(sentMessage().getText()).isEqualTo("📝 <b>Matn</b>\n\nyangi task");
+    assertThat(sentMessage().getParseMode()).isEqualTo(ParseMode.HTML);
   }
 
   @Test
@@ -137,6 +141,37 @@ class VoiceDevBotTest {
     bot.consume(voiceUpdate("audio/ogg"));
 
     verify(telegramClient).execute(any(SendMessage.class));
+  }
+
+  @Test
+  void should_escape_transcript_because_reply_is_html() throws TelegramApiException {
+    when(useCase.handle(any()))
+        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("a < b & c")));
+
+    bot.consume(voiceUpdate("audio/ogg"));
+
+    assertThat(sentMessage().getText()).endsWith("a &lt; b &amp; c");
+  }
+
+  @Test
+  void should_publish_command_menu_to_telegram() throws TelegramApiException {
+    bot.publishCommandMenu();
+
+    ArgumentCaptor<SetMyCommands> captor = ArgumentCaptor.forClass(SetMyCommands.class);
+    verify(telegramClient).execute(captor.capture());
+    assertThat(captor.getValue().getCommands())
+        .extracting(BotCommand::getCommand)
+        .containsExactly("help", "project", "addproject", "glossary", "lang");
+  }
+
+  @Test
+  void should_keep_running_when_command_menu_cannot_be_published() throws TelegramApiException {
+    when(telegramClient.execute(any(SetMyCommands.class)))
+        .thenThrow(new TelegramApiException("network"));
+
+    bot.publishCommandMenu();
+
+    verify(telegramClient).execute(any(SetMyCommands.class));
   }
 
   @Test
