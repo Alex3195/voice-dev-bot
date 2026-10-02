@@ -27,11 +27,12 @@ public record SttProperties(
    * @param url whisper-server manzili: dev'da native, serverda Docker (Tailscale orqali)
    * @param language nutq tili (Whisper kodi)
    * @param prompt boshlang'ich matn: yozuv uslubi (lotin) va atamalar lug'ati
-   * @param timeout bitta voice'ni matnga aylantirish uchun maksimal vaqt
+   * @param timeout bitta audio'ni matnga aylantirish uchun maksimal vaqt (uzun fayllar minutlab
+   *     ketadi)
    */
   public record Whisper(
       @NotNull @DefaultValue("http://127.0.0.1:8178") URI url,
       @NotBlank @DefaultValue("uz") String language,
       @NotNull @DefaultValue("") String prompt,
-      @NotNull @DefaultValue("120s") Duration timeout) {}
+      @NotNull @DefaultValue("15m") Duration timeout) {}
 }

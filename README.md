@@ -7,7 +7,9 @@ To'liq g'oya va bosqichlar: [CLAUDE.md](CLAUDE.md).
 
 ## Hozir nima ishlaydi
 
-- Whitelist'dagi Telegram user'dan voice qabul qilinadi, boshqalar e'tiborsiz qoldiriladi.
+- Whitelist'dagi Telegram user'dan audio qabul qilinadi, boshqalar e'tiborsiz qoldiriladi:
+  voice, audio fayl (mp3, m4a...), video, video xabar, audio/video hujjat. Limit — 20 MB (oddiy Bot API).
+- Uzun matn 4096 belgilik bir nechta xabarga bo'linadi. Audio'lar navbat bilan qayta ishlanadi.
 - Audio Telegram'dan yuklanadi va whisper.cpp server orqali o'zbekcha matnga aylantiriladi.
 - Bot natija matnini qaytaradi.
 
@@ -64,7 +66,7 @@ Spring `.env` faylni avtomatik o'qiydi (`spring.config.import`); serverda oddiy 
 | `STT_WHISPER_URL` | whisper-server manzili | `http://127.0.0.1:8178` |
 | `STT_WHISPER_LANGUAGE` | Nutq tili | `uz` |
 | `STT_WHISPER_PROMPT` | Whisper'ga yuboriladigan umumiy prompt | o'zbekcha lotin namuna gap |
-| `STT_WHISPER_TIMEOUT` | Bitta voice uchun maksimal vaqt | `120s` |
+| `STT_WHISPER_TIMEOUT` | Bitta audio uchun maksimal vaqt | `15m` |
 
 Majburiy sozlama bo'lmasa ilova ishga tushmaydi. `.env` commit qilinmaydi.
 
