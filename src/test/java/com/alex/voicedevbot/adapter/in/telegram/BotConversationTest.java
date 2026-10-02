@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
+import com.alex.voicedevbot.application.port.out.GitLabApi;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
+import com.alex.voicedevbot.application.service.LinkRepoService;
+import com.alex.voicedevbot.application.service.ManageGitLabService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
@@ -22,9 +25,12 @@ import com.alex.voicedevbot.domain.Transcript;
 import com.alex.voicedevbot.domain.TranscriptRecord;
 import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.UserSettings;
+import com.alex.voicedevbot.support.InMemoryGitLabConnectionRepository;
+import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
 import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -33,6 +39,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 
 /** Muloqot oqimlari haqiqiy use-case'lar va xotiradagi repository'lar bilan. */
 class BotConversationTest {
@@ -45,6 +52,11 @@ class BotConversationTest {
   private final InMemoryUserSettingsRepository settingsRepository =
       new InMemoryUserSettingsRepository();
   private final InMemoryTranscriptionLog transcriptLog = new InMemoryTranscriptionLog();
+  private final InMemoryGitLabConnectionRepository gitLabConnections =
+      new InMemoryGitLabConnectionRepository();
+  private final InMemoryProjectRepoLinks repoLinks = new InMemoryProjectRepoLinks();
+  private final GitLabApi gitLabApi = Mockito.mock(GitLabApi.class);
+  private final Clock clock = Clock.fixed(Instant.parse("2026-10-02T09:00:00Z"), ZoneOffset.UTC);
   private final BotConversation conversation = conversation();
 
   private BotConversation conversation() {
@@ -56,6 +68,16 @@ class BotConversationTest {
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
         new BrowseTranscriptsService(access, transcriptLog),
+        new GitLabDialog(
+            new ManageGitLabService(access, gitLabConnections, gitLabApi, clock),
+            new LinkRepoService(
+                access,
+                settings,
+                gitLabConnections,
+                repoLinks,
+                gitLabApi,
+                project -> java.util.Map.of("CLAUDE.md", project.value()),
+                clock)),
         ZoneOffset.UTC);
   }
 
@@ -169,7 +191,12 @@ class BotConversationTest {
     assertThat(reply.screen().html()).startsWith("📁 <b>Finbank</b> · ✅ faol\n📖 Lug'atda 1 atama");
     assertThat(labels(reply.screen()))
         .containsExactly(
-            "📝 Transkriptlar", "📖 Lug'at", "✅ Tasklar", "📄 Hujjatlar", "⬅️ Projectlar");
+            "📝 Transkriptlar",
+            "📖 Lug'at",
+            "✅ Tasklar",
+            "📄 Hujjatlar",
+            "🔗 Repo ulash",
+            "⬅️ Projectlar");
     assertThat(labels(press(Actions.PROJECTS).screen()))
         .contains("ELT imzo · 0 atama", "✅ Finbank · 1 atama");
   }
@@ -260,9 +287,12 @@ class BotConversationTest {
     logTranscript(null, "projectsiz", Instant.parse("2026-10-02T09:30:00Z"));
 
     Screen settings = press(Actions.SETTINGS).screen();
-    Screen list = press(actions(settings).get(1)).screen();
+    Screen list = press(Actions.transcripts(null, 0)).screen();
 
     assertThat(settings.html()).startsWith("⚙️ <b>Sozlamalar</b>").contains("O'zbek");
+    assertThat(actions(settings))
+        .containsExactly(
+            Actions.LANGUAGES, Actions.GITLAB, Actions.transcripts(null, 0), Actions.HOME);
     assertThat(list.html()).startsWith("📝 <b>Projectsiz transkriptlar</b>");
     assertThat(labels(list)).containsExactly("02.10 09:30 · 1:15 · projectsiz", "⬅️ Orqaga");
     assertThat(actions(list).getLast()).isEqualTo(Actions.SETTINGS);

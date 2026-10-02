@@ -30,6 +30,23 @@ final class Actions {
   static final String TRANSCRIPTS = "tr:";
   static final String OPEN_TRANSCRIPT = "tro:";
 
+  static final String GITLAB = "gl";
+  static final String GITLAB_PREFIX = "gl:";
+  static final String GITLAB_ADD = "gl:add";
+  static final String GITLAB_COM = "gl:com";
+  static final String GITLAB_OTHER = "gl:url";
+  static final String GITLAB_SHOW = "gl:c:";
+  static final String GITLAB_RENEW = "gl:r:";
+  static final String GITLAB_REMOVE_ASK = "gl:d:";
+  static final String GITLAB_REMOVE = "gl:dd:";
+  static final String REPO = "gl:repo";
+  static final String REPO_CHOOSE = "gl:choose";
+  static final String REPO_PICK = "gl:pick:";
+  static final String REPO_LINK = "gl:l:";
+  static final String REPO_NEW = "gl:new:";
+  static final String REPO_NAMESPACE = "gl:ns:";
+  static final String REPO_UNLINK = "gl:unlink";
+
   /** {@link #transcripts} da projectsiz transkriptlar uchun project o'rnidagi belgi. */
   static final String WITHOUT_PROJECT = "-";
 

@@ -66,12 +66,17 @@ final class BotScreens {
         "⚙️ <b>Sozlamalar</b>\n\n🌐 Nutq tili: " + languageLabel(language),
         List.of(
             List.of(new Button("🌐 Nutq tili", Actions.LANGUAGES)),
+            List.of(new Button("🔗 GitLab", Actions.GITLAB)),
             List.of(new Button("📝 Projectsiz transkriptlar", Actions.transcripts(null, 0))),
             List.of(BACK_HOME)));
   }
 
-  /** Project tugmasi bosilganda: project faol qilinadi va uning bo'limlari ko'rsatiladi. */
-  static Screen projectCard(ProjectSummary project) {
+  /**
+   * Project tugmasi bosilganda: project faol qilinadi va uning bo'limlari ko'rsatiladi.
+   *
+   * @param repo ulangan repo yoki "Repo ulash" tugmasi
+   */
+  static Screen projectCard(ProjectSummary project, Optional<Button> repo) {
     String key = project.name().key();
     String html =
         "📁 "
@@ -79,16 +84,25 @@ final class BotScreens {
             + " · ✅ faol\n📖 Lug'atda "
             + project.termCount()
             + " atama\n\nOvoz yuborsangiz, shu projectga yoziladi.";
-    return new Screen(
-        html,
+    List<List<Button>> rows = new ArrayList<>();
+    rows.add(
         List.of(
-            List.of(
-                new Button("📝 Transkriptlar", Actions.transcripts(key, 0)),
-                new Button("📖 Lug'at", Actions.GLOSSARY)),
-            List.of(
-                new Button("✅ Tasklar", Actions.soon(key)),
-                new Button("📄 Hujjatlar", Actions.soon(key))),
-            List.of(new Button("⬅️ Projectlar", Actions.PROJECTS))));
+            new Button("📝 Transkriptlar", Actions.transcripts(key, 0)),
+            new Button("📖 Lug'at", Actions.GLOSSARY)));
+    rows.add(
+        List.of(
+            new Button("✅ Tasklar", Actions.soon(key)),
+            new Button("📄 Hujjatlar", Actions.soon(key))));
+    repo.ifPresent(button -> rows.add(List.of(button)));
+    rows.add(List.of(new Button("⬅️ Projectlar", Actions.PROJECTS)));
+    return new Screen(html, rows);
+  }
+
+  /** Yangi project yaratilganda — darhol repo ulashni taklif qiladi. */
+  static Screen withRepoOffer(Screen screen) {
+    List<List<Button>> rows = new ArrayList<>(screen.rows());
+    rows.add(rows.size() - 1, List.of(new Button("🔗 Repo ulash", Actions.REPO)));
+    return new Screen(screen.html(), rows, screen.attachments());
   }
 
   /**
