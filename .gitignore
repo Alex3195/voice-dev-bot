@@ -39,3 +39,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Whisper model fayllari (katta, repo'ga kirmaydi)
+models/
+whisper-server-*.wav

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.Voice;
@@ -56,15 +58,44 @@ class VoiceDevBotTest {
   }
 
   @Test
-  void should_use_default_mime_type_when_voice_has_none() {
+  void should_transcribe_audio_file_when_it_is_sent_as_document() {
     when(useCase.handle(any()))
         .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript("x")));
+    Document document = new Document();
+    document.setFileId("doc-id");
+    document.setMimeType("audio/mpeg");
+    Update update = voiceUpdate("audio/ogg");
+    update.getMessage().setVoice(null);
+    update.getMessage().setDocument(document);
 
-    bot.consume(voiceUpdate(null));
+    bot.consume(update);
 
-    ArgumentCaptor<VoiceMessage> captor = ArgumentCaptor.forClass(VoiceMessage.class);
-    verify(useCase).handle(captor.capture());
-    assertThat(captor.getValue().audio().mimeType()).isEqualTo(VoiceDevBot.DEFAULT_VOICE_MIME_TYPE);
+    verify(useCase)
+        .handle(
+            new VoiceMessage(new TelegramUserId(USER_ID), new AudioRef("doc-id", "audio/mpeg")));
+  }
+
+  @Test
+  void should_explain_size_limit_when_too_large_file_cannot_be_downloaded()
+      throws TelegramApiException {
+    when(useCase.handle(any())).thenThrow(new AudioUnavailableException("file is too big", null));
+    Update update = voiceUpdate("audio/ogg");
+    update.getMessage().getVoice().setFileSize(25L * 1024 * 1024);
+
+    bot.consume(update);
+
+    assertThat(sentMessage().getText()).isEqualTo(VoiceDevBot.TOO_LARGE_REPLY.formatted(25, 20));
+  }
+
+  @Test
+  void should_send_long_transcript_in_several_messages() throws TelegramApiException {
+    String longText = "so'z ".repeat(1_500).strip();
+    when(useCase.handle(any()))
+        .thenReturn(new VoiceHandlingResult.Transcribed(new Transcript(longText)));
+
+    bot.consume(voiceUpdate("audio/ogg"));
+
+    verify(telegramClient, times(2)).execute(any(SendMessage.class));
   }
 
   @Test
