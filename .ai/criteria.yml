@@ -1,0 +1,17 @@
+# Mashina o'qiydigan talablar: bot task yaratishda va agent kod yozishda shularga tayanadi.
+# Batafsil: docs/architecture.md, docs/coding-principles.md, docs/testing.md
+stack: java-spring
+language: java-21
+build: gradle
+architecture: hexagonal
+rules:
+  - docs/agent-workflow.md
+  - docs/architecture.md
+  - docs/coding-principles.md
+  - docs/testing.md
+coverage_min: 80
+required_tests: [unit, integration, architecture]
+qa: [smoke]
+ci: [spotless, build, test, archunit, jacoco]
+verify_command: ./gradlew check
+deploy: {staging: auto, prod: manual-approval}

@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: voice-dev-bot
+  config:
+    import: optional:file:.env[.properties]
+
+bot:
+  token: ${TELEGRAM_BOT_TOKEN:}
+  allowed-user-ids: ${TELEGRAM_ALLOWED_USER_IDS:}
+  api-url: ${BOT_API_URL:https://api.telegram.org}
+  polling-enabled: ${BOT_POLLING_ENABLED:true}

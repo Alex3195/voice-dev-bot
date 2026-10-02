@@ -3,6 +3,24 @@
 Telegram voice bot: ovozli buyruq → matn → task (GitHub Issue / Jira) → kod yozish → test → deploy.
 Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o'z repo'sida saqlaydi.
 
+## Stack
+- Java 21, Spring Boot 4.1, Gradle (Kotlin DSL, wrapper; daemon JVM `gradle/gradle-daemon-jvm.properties` da 21 ga qotirilgan).
+- Telegram: `org.telegram:telegrambots-longpolling` + `telegrambots-client` 10.3 (Spring starter emas — u Boot 3.5 uchun).
+- Arxitektura: **Hexagonal (Ports & Adapters)**, paket `com.alex.voicedevbot`.
+
+## Qoidalar (kod yozishdan oldin o'qing)
+- [docs/agent-workflow.md](docs/agent-workflow.md) — **agent shu tartibda ishlaydi**: scope, qachon so'rash, git, hisobot.
+- [docs/architecture.md](docs/architecture.md) — qatlamlar, bog'liqlik yo'nalishi, yangi integratsiya qo'shish.
+- [docs/coding-principles.md](docs/coding-principles.md) — SOLID, clean code, Java/Spring qoidalari.
+- [docs/testing.md](docs/testing.md) — test turlari, nomlash, coverage, QA.
+- [.ai/criteria.yml](.ai/criteria.yml) — mashina o'qiydigan talablar; [.ai/task-template.md](.ai/task-template.md) — issue shabloni va Definition of Done.
+
+## Buyruqlar
+- `./gradlew check` — spotless + barcha testlar + ArchUnit + JaCoCo (≥80%). PR'dan oldin yashil bo'lishi shart.
+- `./gradlew spotlessApply` — formatlash (google-java-format).
+- `./gradlew bootRun` — botni ishga tushirish (`.env` kerak, `.env.example`ga qarang).
+- Bitta test: `./gradlew test --tests '*VoiceDevBotTest'`.
+
 ## Oqim
 1. Telegram bot voice xabarni qabul qiladi (faqat whitelist'dagi Telegram ID).
 2. STT: `transcribe(audio) -> text` interface orqasida (faster-whisper, `language="uz"`). Dvigatel almashtirilishi oson bo'lsin (lokal Whisper yoki tashqi API).
@@ -45,7 +63,6 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 - Agent `main`'ga to'g'ridan-to'g'ri push qila olmasin (branch protection), faqat feature branch + PR.
 
 ## Ochiq savollar
-- Bot tili: Java (Spring Boot + TelegramBots) yoki Python? (hali tanlanmagan)
 - Tracker: avval GitHub Issues, Jira keyinroq?
 
 ## Bosqichlar
@@ -55,5 +72,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 4. Prod'ga qo'lda tasdiq bilan chiqarish
 
 ## Holat
-- Repo bo'sh, hali kod yozilmagan.
+- 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT hozircha `StubSpeechToText` (Whisper adapteri keyingi task).
+- Keyingi: Whisper adapteri → `TaskParser` (Claude API) → tasdiqlash tugmalari → `IssueTracker` (GitHub).
+- Ma'lum muammo: TelegramBots 10.3 `downloadFileAsStream` API manzilini e'tiborsiz qoldiradi va HTTP statusni tekshirmaydi — shuning uchun `TelegramAudioSource` faylni `java.net.http.HttpClient` bilan o'zi yuklaydi.
 - Claude GitHub App'iga bu private repo uchun yozish ruxsati berilmagan (push rad etilgan); kod IntelliJ/VS Code'da lokal yoziladi va o'zingiz push qilasiz yoki ruxsat berasiz.
