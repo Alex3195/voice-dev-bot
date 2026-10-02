@@ -8,6 +8,8 @@ import com.alex.voicedevbot.adapter.out.stt.StubSpeechToText;
 import com.alex.voicedevbot.adapter.out.stt.WhisperCppSpeechToText;
 import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
+import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
+import com.alex.voicedevbot.application.port.in.ManageGitLabUseCase;
 import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
 import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.out.ProjectRepository;
@@ -26,8 +28,16 @@ import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 
 /** Smoke: Spring konteksti to'g'ri yig'iladi, Telegram'ga ulanmasdan. */
 @SpringBootTest(
-    properties = {"bot.token=123:test", "bot.allowed-user-ids=1,2", "bot.polling-enabled=false"})
+    properties = {
+      "bot.token=123:test",
+      "bot.allowed-user-ids=1,2",
+      "bot.polling-enabled=false",
+      "secrets.key=" + VoiceDevBotApplicationTests.SECRETS_KEY
+    })
 class VoiceDevBotApplicationTests {
+
+  /** 32 bayt Base64 — faqat testlar uchun. */
+  static final String SECRETS_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
   @Autowired ApplicationContext context;
 
@@ -70,6 +80,7 @@ class VoiceDevBotApplicationTests {
                 "--bot.allowed-user-ids=1",
                 "--bot.polling-enabled=false",
                 "--stt.engine=stub",
+                "--secrets.key=" + SECRETS_KEY,
                 "--spring.config.import="))) {
       assertThat(stubContext.getBean(SpeechToText.class)).isInstanceOf(StubSpeechToText.class);
     }
@@ -86,8 +97,33 @@ class VoiceDevBotApplicationTests {
                         "--bot.token=",
                         "--bot.allowed-user-ids=1",
                         "--bot.polling-enabled=false",
+                        "--secrets.key=" + SECRETS_KEY,
                         "--spring.config.import=")))
         .hasStackTraceContaining("bot.token");
+  }
+
+  @Test
+  void should_fail_to_start_when_secrets_key_is_missing_or_not_32_bytes() {
+    for (String key : new String[] {"", "c2hvcnQ="}) {
+      SpringApplication app = new SpringApplication(VoiceDevBotApplication.class);
+
+      assertThatThrownBy(
+              () ->
+                  app.run(
+                      withDatasource(
+                          "--bot.token=123:test",
+                          "--bot.allowed-user-ids=1",
+                          "--bot.polling-enabled=false",
+                          "--secrets.key=" + key,
+                          "--spring.config.import=")))
+          .hasStackTraceContaining(key.isEmpty() ? "secrets.key" : "SECRETS_KEY must be 32 bytes");
+    }
+  }
+
+  @Test
+  void should_wire_gitlab_use_cases() {
+    assertThat(context.getBean(ManageGitLabUseCase.class)).isNotNull();
+    assertThat(context.getBean(LinkRepoUseCase.class)).isNotNull();
   }
 
   private static String[] withDatasource(String... args) {

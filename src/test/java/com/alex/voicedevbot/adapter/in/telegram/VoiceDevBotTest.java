@@ -18,19 +18,29 @@ import com.alex.voicedevbot.application.port.in.VoiceMessage;
 import com.alex.voicedevbot.application.port.out.AudioUnavailableException;
 import com.alex.voicedevbot.application.port.out.StorageException;
 import com.alex.voicedevbot.application.port.out.TranscriptionException;
+import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
+import com.alex.voicedevbot.domain.SourceAudio;
 import com.alex.voicedevbot.domain.TelegramUserId;
 import com.alex.voicedevbot.domain.Transcript;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
+import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
+import org.telegram.telegrambots.meta.api.methods.send.SendVoice;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Document;
@@ -69,7 +79,12 @@ class VoiceDevBotTest {
     bot.consume(voiceUpdate());
 
     // then
-    verify(useCase).handle(new VoiceMessage(USER, new AudioRef("file-id", "audio/ogg")));
+    verify(useCase)
+        .handle(
+            new VoiceMessage(
+                USER,
+                new SourceAudio(
+                    new AudioRef("file-id", "audio/ogg"), AudioKind.VOICE, Duration.ofSeconds(3))));
     SendMessage sent = sentMessage();
     assertThat(sent.getChatId()).isEqualTo(String.valueOf(CHAT_ID));
     assertThat(sent.getText()).isEqualTo("🎙 menyu");
@@ -96,7 +111,12 @@ class VoiceDevBotTest {
 
     bot.consume(update);
 
-    verify(useCase).handle(new VoiceMessage(USER, new AudioRef("doc-id", "audio/mpeg")));
+    verify(useCase)
+        .handle(
+            new VoiceMessage(
+                USER,
+                new SourceAudio(
+                    new AudioRef("doc-id", "audio/mpeg"), AudioKind.DOCUMENT, Duration.ZERO)));
   }
 
   @Test
@@ -164,6 +184,51 @@ class VoiceDevBotTest {
   }
 
   @Test
+  void should_delete_message_with_token_after_handling_it() throws TelegramApiException {
+    when(conversation.expectsSecret(USER)).thenReturn(true);
+    when(conversation.onText(USER, "glpat-secret")).thenReturn(Optional.of(MENU_SCREEN));
+    Update update = textUpdate("glpat-secret");
+    update.getMessage().setMessageId(MESSAGE_ID);
+
+    bot.consume(update);
+
+    ArgumentCaptor<DeleteMessage> delete = ArgumentCaptor.forClass(DeleteMessage.class);
+    verify(telegramClient).execute(delete.capture());
+    assertThat(delete.getValue().getChatId()).isEqualTo(String.valueOf(CHAT_ID));
+    assertThat(delete.getValue().getMessageId()).isEqualTo(MESSAGE_ID);
+  }
+
+  @Test
+  void should_ask_user_to_delete_token_message_when_bot_cannot() throws TelegramApiException {
+    when(conversation.expectsSecret(USER)).thenReturn(true);
+    when(conversation.onText(any(), any())).thenReturn(Optional.empty());
+    when(telegramClient.execute(any(DeleteMessage.class)))
+        .thenThrow(new TelegramApiException("message can't be deleted"));
+    Update update = textUpdate("glpat-secret");
+    update.getMessage().setMessageId(MESSAGE_ID);
+
+    bot.consume(update);
+
+    assertThat(sentMessage().getText()).isEqualTo(VoiceDevBot.SECRET_NOT_DELETED_REPLY);
+  }
+
+  @Test
+  void should_not_delete_ordinary_text() throws TelegramApiException {
+    when(conversation.onText(any(), any())).thenReturn(Optional.empty());
+
+    bot.consume(textUpdate("salom"));
+
+    verify(telegramClient, never()).execute(any(DeleteMessage.class));
+  }
+
+  @Test
+  void should_notify_user_in_private_chat() throws TelegramApiException {
+    bot.notify(USER, MENU_SCREEN);
+
+    assertThat(sentMessage().getChatId()).isEqualTo(String.valueOf(USER_ID));
+  }
+
+  @Test
   void should_route_any_text_to_conversation_and_send_its_screen() throws TelegramApiException {
     when(conversation.onText(USER, "ELT imzo")).thenReturn(Optional.of(MENU_SCREEN));
 
@@ -219,6 +284,46 @@ class VoiceDevBotTest {
     assertThat(answeredCallback().getText()).isNull();
   }
 
+  @ParameterizedTest
+  @EnumSource(AudioKind.class)
+  void should_resend_attachment_by_file_id_in_its_original_form_before_text(AudioKind kind)
+      throws TelegramApiException {
+    Screen withAudio =
+        new Screen("📝 matn", List.of(), List.of(new Screen.Attachment(kind, "file-id")));
+    when(conversation.onButton(USER, "+tro:1"))
+        .thenReturn(Optional.of(new Reply(withAudio, true, "")));
+
+    bot.consume(buttonUpdate("+tro:1"));
+
+    switch (kind) {
+      case VOICE -> verify(telegramClient).execute(any(SendVoice.class));
+      case AUDIO -> verify(telegramClient).execute(any(SendAudio.class));
+      case VIDEO -> verify(telegramClient).execute(any(SendVideo.class));
+      case VIDEO_NOTE -> verify(telegramClient).execute(any(SendVideoNote.class));
+      case DOCUMENT -> verify(telegramClient).execute(any(SendDocument.class));
+    }
+    assertThat(sentMessage().getText()).isEqualTo("📝 matn");
+  }
+
+  @Test
+  void should_send_text_when_attachment_cannot_be_sent() throws TelegramApiException {
+    Screen withAudio =
+        new Screen(
+            "📝 matn", List.of(), List.of(new Screen.Attachment(AudioKind.VOICE, "stale-id")));
+    when(conversation.onButton(USER, "+tro:1"))
+        .thenReturn(Optional.of(new Reply(withAudio, true, "")));
+    when(telegramClient.execute(any(SendVoice.class)))
+        .thenThrow(new TelegramApiException("wrong file identifier"));
+
+    bot.consume(buttonUpdate("+tro:1"));
+
+    ArgumentCaptor<SendVoice> voice = ArgumentCaptor.forClass(SendVoice.class);
+    verify(telegramClient).execute(voice.capture());
+    assertThat(voice.getValue().getVoice().getAttachName()).isEqualTo("stale-id");
+    assertThat(voice.getValue().getChatId()).isEqualTo(String.valueOf(CHAT_ID));
+    assertThat(sentMessage().getText()).isEqualTo("📝 matn");
+  }
+
   @Test
   void should_only_stop_button_spinner_when_there_is_no_reply() throws TelegramApiException {
     when(conversation.onButton(any(), anyString())).thenReturn(Optional.empty());
@@ -261,7 +366,7 @@ class VoiceDevBotTest {
     verify(telegramClient).execute(captor.capture());
     assertThat(captor.getValue().getCommands())
         .extracting(BotCommand::getCommand)
-        .containsExactly("start", "project", "glossary", "lang", "help");
+        .containsExactly("start", "project", "glossary", "settings", "lang", "help");
   }
 
   @Test

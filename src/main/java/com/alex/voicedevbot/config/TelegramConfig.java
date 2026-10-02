@@ -1,16 +1,21 @@
 package com.alex.voicedevbot.config;
 
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation;
+import com.alex.voicedevbot.adapter.in.telegram.GitLabDialog;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
 import com.alex.voicedevbot.adapter.out.telegram.TelegramAudioSource;
+import com.alex.voicedevbot.application.port.in.BrowseTranscriptsUseCase;
 import com.alex.voicedevbot.application.port.in.ChangeLanguageUseCase;
 import com.alex.voicedevbot.application.port.in.HandleVoiceMessageUseCase;
+import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
+import com.alex.voicedevbot.application.port.in.ManageGitLabUseCase;
 import com.alex.voicedevbot.application.port.in.ManageGlossaryUseCase;
 import com.alex.voicedevbot.application.port.in.ManageProjectsUseCase;
 import com.alex.voicedevbot.application.port.out.AudioSource;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.ZoneId;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -44,8 +49,13 @@ class TelegramConfig {
   BotConversation botConversation(
       ManageProjectsUseCase projects,
       ManageGlossaryUseCase glossary,
-      ChangeLanguageUseCase language) {
-    return new BotConversation(projects, glossary, language);
+      ChangeLanguageUseCase language,
+      BrowseTranscriptsUseCase transcripts,
+      ManageGitLabUseCase gitLab,
+      LinkRepoUseCase repos,
+      ZoneId zoneId) {
+    return new BotConversation(
+        projects, glossary, language, transcripts, new GitLabDialog(gitLab, repos), zoneId);
   }
 
   @Bean

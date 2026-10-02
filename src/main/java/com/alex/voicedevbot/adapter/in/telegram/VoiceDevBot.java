@@ -15,9 +15,16 @@ import org.telegram.telegrambots.longpolling.util.DefaultLongPollingUpdateConsum
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
+import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
+import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
+import org.telegram.telegrambots.meta.api.methods.send.SendVoice;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
@@ -38,6 +45,9 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
       "⚠️ Amalni bajarib bo'lmadi, keyinroq urinib ko'ring.";
   static final String TOO_LARGE_REPLY =
       "⚠️ Fayl juda katta (%d MB). Telegram bot %d MB gacha faylni yuklab ola oladi.";
+
+  static final String SECRET_NOT_DELETED_REPLY =
+      "⚠️ Token yozilgan xabarni o'chirib bo'lmadi — uni o'zingiz o'chiring.";
 
   private static final long BYTES_IN_MB = 1024 * 1024;
 
@@ -91,6 +101,7 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
 
   private void handleText(Message message) {
     TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
+    boolean secret = conversation.expectsSecret(sender);
     try {
       conversation
           .onText(sender, message.getText())
@@ -98,6 +109,25 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
     } catch (StorageException e) {
       log.error("Failed to handle text message in chat {}", message.getChatId(), e);
       send(message.getChatId(), Screen.text(COMMAND_FAILURE_REPLY));
+    } finally {
+      if (secret) {
+        delete(message.getChatId(), message.getMessageId());
+      }
+    }
+  }
+
+  /** Bot tomonidan boshlangan xabar (masalan, token ogohlantirishi) — shaxsiy chatga. */
+  void notify(TelegramUserId user, Screen screen) {
+    send(user.value(), screen);
+  }
+
+  /** Token yozilgan xabar chatda qolmasligi kerak; o'chirib bo'lmasa — ogohlantirish. */
+  private void delete(Long chatId, Integer messageId) {
+    try {
+      telegramClient.execute(new DeleteMessage(chatId.toString(), messageId));
+    } catch (TelegramApiException e) {
+      log.warn("Failed to delete secret message {} in chat {}", messageId, chatId, e);
+      send(chatId, Screen.text(SECRET_NOT_DELETED_REPLY));
     }
   }
 
@@ -130,7 +160,7 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
   private void handleAudio(Message message, IncomingAudio audio) {
     TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
     try {
-      switch (handleVoiceMessage.handle(new VoiceMessage(sender, audio.ref()))) {
+      switch (handleVoiceMessage.handle(new VoiceMessage(sender, audio.audio()))) {
         case VoiceHandlingResult.Transcribed(var transcript) ->
             send(message.getChatId(), conversation.transcript(sender, transcript.text()));
         case VoiceHandlingResult.AccessDenied() ->
@@ -150,8 +180,9 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
         audio.sizeBytes() / BYTES_IN_MB, IncomingAudio.MAX_DOWNLOAD_BYTES / BYTES_IN_MB);
   }
 
-  /** Uzun matn bo'laklanadi, tugmalar oxirgi bo'lak ostida. */
+  /** Avval ilovalar, keyin matn: uzun matn bo'laklanadi, tugmalar oxirgi bo'lak ostida. */
   private void send(Long chatId, Screen screen) {
+    screen.attachments().forEach(attachment -> sendAttachment(chatId, attachment));
     List<String> chunks = MessageChunks.split(screen.html(), MessageChunks.MAX_MESSAGE_LENGTH);
     for (int i = 0; i < chunks.size(); i++) {
       SendMessage message = new SendMessage(chatId.toString(), chunks.get(i));
@@ -165,6 +196,25 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
         log.error("Failed to send reply to chat {}", chatId, e);
         return;
       }
+    }
+  }
+
+  /**
+   * Yuborib bo'lmasa (masalan, bot tokeni almashib {@code file_id} eskirgan) matn baribir boradi.
+   */
+  private void sendAttachment(Long chatId, Screen.Attachment attachment) {
+    String chat = chatId.toString();
+    InputFile file = new InputFile(attachment.fileId());
+    try {
+      switch (attachment.kind()) {
+        case VOICE -> telegramClient.execute(new SendVoice(chat, file));
+        case AUDIO -> telegramClient.execute(new SendAudio(chat, file));
+        case VIDEO -> telegramClient.execute(new SendVideo(chat, file));
+        case VIDEO_NOTE -> telegramClient.execute(new SendVideoNote(chat, file));
+        case DOCUMENT -> telegramClient.execute(new SendDocument(chat, file));
+      }
+    } catch (TelegramApiException e) {
+      log.warn("Failed to send {} attachment to chat {}", attachment.kind(), chatId, e);
     }
   }
 

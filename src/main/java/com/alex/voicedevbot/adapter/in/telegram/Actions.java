@@ -25,6 +25,30 @@ final class Actions {
   static final String LANGUAGES = "lang";
   static final String SET_LANGUAGE = "lang:";
   static final String CANCEL = "cancel";
+  static final String SETTINGS = "settings";
+  static final String SOON = "soon:";
+  static final String TRANSCRIPTS = "tr:";
+  static final String OPEN_TRANSCRIPT = "tro:";
+
+  static final String GITLAB = "gl";
+  static final String GITLAB_PREFIX = "gl:";
+  static final String GITLAB_ADD = "gl:add";
+  static final String GITLAB_COM = "gl:com";
+  static final String GITLAB_OTHER = "gl:url";
+  static final String GITLAB_SHOW = "gl:c:";
+  static final String GITLAB_RENEW = "gl:r:";
+  static final String GITLAB_REMOVE_ASK = "gl:d:";
+  static final String GITLAB_REMOVE = "gl:dd:";
+  static final String REPO = "gl:repo";
+  static final String REPO_CHOOSE = "gl:choose";
+  static final String REPO_PICK = "gl:pick:";
+  static final String REPO_LINK = "gl:l:";
+  static final String REPO_NEW = "gl:new:";
+  static final String REPO_NAMESPACE = "gl:ns:";
+  static final String REPO_UNLINK = "gl:unlink";
+
+  /** {@link #transcripts} da projectsiz transkriptlar uchun project o'rnidagi belgi. */
+  static final String WITHOUT_PROJECT = "-";
 
   private Actions() {}
 
@@ -38,6 +62,23 @@ final class Actions {
 
   static String setLanguage(String code) {
     return SET_LANGUAGE + code;
+  }
+
+  /** Hali tayyor bo'lmagan bo'lim: project kartochkasi qayta ko'rsatiladi. */
+  static String soon(String projectKey) {
+    return SOON + idOf(projectKey);
+  }
+
+  /**
+   * @param projectKey {@code null} — projectsiz transkriptlar
+   */
+  static String transcripts(String projectKey, int page) {
+    String scope = projectKey == null ? WITHOUT_PROJECT : idOf(projectKey);
+    return TRANSCRIPTS + scope + ":" + page;
+  }
+
+  static String openTranscript(long id) {
+    return NEW_MESSAGE + OPEN_TRANSCRIPT + id;
   }
 
   static String idOf(String key) {

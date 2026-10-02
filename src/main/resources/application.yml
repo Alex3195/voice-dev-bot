@@ -21,8 +21,18 @@ stt:
   default-language: ${STT_DEFAULT_LANGUAGE:uz}
   whisper:
     url: ${STT_WHISPER_URL:http://127.0.0.1:8178}
+    # Serverda yuklangan model (compose.yaml'dagi WHISPER_MODEL) — faqat jurnalga yoziladi
+    model: ${STT_WHISPER_MODEL:ggml-large-v3-q5_0}
     timeout: ${STT_WHISPER_TIMEOUT:15m}
     # Til bo'yicha namuna matn. Whisper o'zbekchada goh kirill, goh turkcha imloga o'tib ketadi —
     # lotin namunasi buni barqarorlashtiradi. Project atamalari bunga avtomatik qo'shiladi.
     base-prompts:
       uz: "Assalomu alaykum. Bu matn o'zbek tilida, lotin yozuvida yozilgan."
+
+journal:
+  # Audio arxivi: <dir>/<yyyy-mm-dd>/<id>.<ext>, muddatsiz saqlanadi
+  audio-dir: ${AUDIO_ARCHIVE_DIR:data/audio}
+
+secrets:
+  # GitLab tokenlarini shifrlash kaliti (AES-256-GCM): openssl rand -base64 32
+  key: ${SECRETS_KEY:}

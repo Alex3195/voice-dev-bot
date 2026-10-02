@@ -17,6 +17,7 @@ import com.alex.voicedevbot.application.port.out.TranscriptionException;
 import com.alex.voicedevbot.domain.AudioClip;
 import com.alex.voicedevbot.domain.SpeechLanguage;
 import com.alex.voicedevbot.domain.Transcript;
+import com.alex.voicedevbot.domain.Transcription;
 import com.alex.voicedevbot.domain.TranscriptionHints;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.net.URI;
@@ -38,6 +39,8 @@ class WhisperCppSpeechToTextIntegrationTest {
   private static final TranscriptionHints HINTS =
       new TranscriptionHints(new SpeechLanguage("uz"), List.of("ELT imzo", "kassa bo'limi"));
 
+  private static final String MODEL = "ggml-large-v3-q5_0";
+
   @RegisterExtension
   static WireMockExtension whisper =
       WireMockExtension.newInstance().options(wireMockConfig().dynamicPort()).build();
@@ -51,16 +54,23 @@ class WhisperCppSpeechToTextIntegrationTest {
 
   private static WhisperCppSpeechToText whisperAt(String url, Map<String, String> basePrompts) {
     return new WhisperCppSpeechToText(
-        HttpClient.newHttpClient(), new WhisperCppSettings(URI.create(url), basePrompts, TIMEOUT));
+        HttpClient.newHttpClient(),
+        new WhisperCppSettings(URI.create(url), MODEL, basePrompts, TIMEOUT));
   }
 
   @Test
-  void should_return_stripped_transcript_when_server_recognizes_speech() {
+  void
+      should_return_stripped_transcript_with_sent_prompt_and_model_when_server_recognizes_speech() {
     whisper.stubFor(post(urlPathEqualTo("/inference")).willReturn(ok(" Yangi task yarating.\n")));
 
-    Transcript transcript = speechToText.transcribe(AUDIO, HINTS);
+    Transcription transcription = speechToText.transcribe(AUDIO, HINTS);
 
-    assertThat(transcript).isEqualTo(new Transcript("Yangi task yarating."));
+    assertThat(transcription)
+        .isEqualTo(
+            new Transcription(
+                new Transcript("Yangi task yarating."),
+                "Lotin yozuvida. ELT imzo, kassa bo'limi.",
+                "whisper.cpp " + MODEL));
   }
 
   @Test

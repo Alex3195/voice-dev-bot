@@ -2,7 +2,10 @@ package com.alex.voicedevbot.adapter.in.telegram;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.alex.voicedevbot.domain.AudioKind;
 import com.alex.voicedevbot.domain.AudioRef;
+import com.alex.voicedevbot.domain.SourceAudio;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -17,12 +20,16 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 class IncomingAudioTest {
 
   @Test
-  void should_extract_voice_with_default_mime_type_when_telegram_sends_none() {
+  void should_extract_voice_with_duration_and_default_mime_type_when_telegram_sends_none() {
     Message message = new Message();
     message.setVoice(new Voice("voice-id", "u", 3, null, 10L));
 
     assertThat(IncomingAudio.from(message))
-        .contains(new IncomingAudio(new AudioRef("voice-id", "audio/ogg"), 10));
+        .contains(
+            new IncomingAudio(
+                new SourceAudio(
+                    new AudioRef("voice-id", "audio/ogg"), AudioKind.VOICE, Duration.ofSeconds(3)),
+                10));
   }
 
   @Test
@@ -35,7 +42,7 @@ class IncomingAudioTest {
     message.setAudio(audio);
 
     assertThat(IncomingAudio.from(message))
-        .contains(new IncomingAudio(new AudioRef("audio-id", "audio/mp4"), 500));
+        .contains(new IncomingAudio(source("audio-id", "audio/mp4", AudioKind.AUDIO), 500));
   }
 
   @Test
@@ -43,22 +50,29 @@ class IncomingAudioTest {
     VideoNote note = new VideoNote();
     note.setFileId("note-id");
     note.setFileSize(700);
+    note.setDuration(42);
     Message message = new Message();
     message.setVideoNote(note);
 
     assertThat(IncomingAudio.from(message))
-        .contains(new IncomingAudio(new AudioRef("note-id", "video/mp4"), 700));
+        .contains(
+            new IncomingAudio(
+                new SourceAudio(
+                    new AudioRef("note-id", "video/mp4"),
+                    AudioKind.VIDEO_NOTE,
+                    Duration.ofSeconds(42)),
+                700));
   }
 
   @Test
-  void should_extract_video_with_unknown_size_as_zero() {
+  void should_extract_video_with_unknown_size_and_duration_as_zero() {
     Video video = new Video();
     video.setFileId("video-id");
     Message message = new Message();
     message.setVideo(video);
 
     assertThat(IncomingAudio.from(message))
-        .contains(new IncomingAudio(new AudioRef("video-id", "video/mp4"), 0));
+        .contains(new IncomingAudio(source("video-id", "video/mp4", AudioKind.VIDEO), 0));
   }
 
   @ParameterizedTest
@@ -67,7 +81,7 @@ class IncomingAudioTest {
     Message message = documentMessage(mimeType);
 
     assertThat(IncomingAudio.from(message))
-        .contains(new IncomingAudio(new AudioRef("doc-id", mimeType), 300));
+        .contains(new IncomingAudio(source("doc-id", mimeType, AudioKind.DOCUMENT), 300));
   }
 
   @ParameterizedTest
@@ -87,12 +101,17 @@ class IncomingAudioTest {
 
   @Test
   void should_exceed_download_limit_only_when_size_is_over_20_mb() {
-    AudioRef ref = new AudioRef("id", "audio/ogg");
+    SourceAudio audio = source("id", "audio/ogg", AudioKind.VOICE);
 
-    assertThat(new IncomingAudio(ref, IncomingAudio.MAX_DOWNLOAD_BYTES).exceedsDownloadLimit())
+    assertThat(new IncomingAudio(audio, IncomingAudio.MAX_DOWNLOAD_BYTES).exceedsDownloadLimit())
         .isFalse();
-    assertThat(new IncomingAudio(ref, IncomingAudio.MAX_DOWNLOAD_BYTES + 1).exceedsDownloadLimit())
+    assertThat(
+            new IncomingAudio(audio, IncomingAudio.MAX_DOWNLOAD_BYTES + 1).exceedsDownloadLimit())
         .isTrue();
+  }
+
+  private static SourceAudio source(String fileId, String mimeType, AudioKind kind) {
+    return new SourceAudio(new AudioRef(fileId, mimeType), kind, Duration.ZERO);
   }
 
   private static Message documentMessage(String mimeType) {
