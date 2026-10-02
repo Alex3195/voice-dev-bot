@@ -161,8 +161,9 @@ public class VoiceDevBot extends DefaultLongPollingUpdateConsumer {
     TelegramUserId sender = new TelegramUserId(message.getFrom().getId());
     try {
       switch (handleVoiceMessage.handle(new VoiceMessage(sender, audio.audio()))) {
-        case VoiceHandlingResult.Transcribed(var transcript) ->
-            send(message.getChatId(), conversation.transcript(sender, transcript.text()));
+        case VoiceHandlingResult.Transcribed(var transcript, var journalId) ->
+            send(
+                message.getChatId(), conversation.transcript(sender, transcript.text(), journalId));
         case VoiceHandlingResult.AccessDenied() ->
             log.warn("Ignoring audio message from non-whitelisted user {}", sender.value());
       }

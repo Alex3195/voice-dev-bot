@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.Collectors;
 
 /** Use-case natijalaridan ekranlar (matn + tugmalar) yasaydi. Holatsiz, faqat ko'rinish. */
@@ -90,9 +91,7 @@ final class BotScreens {
             new Button("📝 Transkriptlar", Actions.transcripts(key, 0)),
             new Button("📖 Lug'at", Actions.GLOSSARY)));
     rows.add(
-        List.of(
-            new Button("✅ Tasklar", Actions.soon(key)),
-            new Button("📄 Hujjatlar", Actions.soon(key))));
+        List.of(new Button("✅ Tasklar", Actions.TASKS), new Button("📄 Hujjatlar", Actions.DOCS)));
     repo.ifPresent(button -> rows.add(List.of(button)));
     rows.add(List.of(new Button("⬅️ Projectlar", Actions.PROJECTS)));
     return new Screen(html, rows);
@@ -159,7 +158,9 @@ final class BotScreens {
     String key = record.project().map(ProjectName::key).orElse(null);
     return new Screen(
         html,
-        List.of(List.of(new Button("⬅️ Ro'yxatga", Actions.transcripts(key, 0)))),
+        List.of(
+            List.of(new Button("✅ Task yaratish", Actions.taskFromTranscript(entry.id()))),
+            List.of(new Button("⬅️ Ro'yxatga", Actions.transcripts(key, 0)))),
         List.of(new Attachment(record.audio().kind(), record.audio().ref().id())));
   }
 
@@ -239,6 +240,7 @@ final class BotScreens {
         3️⃣ <b>Ovoz yuboring</b> — voice, audio fayl, video yoki dumaloq video (20 MB gacha).
 
         📝 Avvalgi transkriptlar — project kartochkasida (📁 Projectlar → project).
+        ✅ Tasklar va 📄 Hujjatlar — ham kartochkada, project GitLab repo'ga ulangan bo'lsa.
         🌐 Boshqa tilda gapirsangiz — ⚙️ Sozlamalar → 🌐 Nutq tili.
 
         <b>Buyruqlar</b> (xohlasangiz):
@@ -268,8 +270,14 @@ final class BotScreens {
         List.of(List.of(new Button("📁 Projectlar", Actions.PROJECTS)), List.of(BACK_HOME)));
   }
 
+  /**
+   * @param journalId jurnaldagi raqam; bo'sh bo'lsa (jurnalga yozilmagan) task tugmasi yo'q
+   */
   static Screen transcript(
-      String text, Optional<ProjectName> activeProject, SpeechLanguage language) {
+      String text,
+      Optional<ProjectName> activeProject,
+      SpeechLanguage language,
+      OptionalLong journalId) {
     String project =
         activeProject.map(name -> Html.escape(name.value())).orElse("project tanlanmagan");
     String html =
@@ -282,8 +290,11 @@ final class BotScreens {
             + "</i>";
     String switchLabel =
         activeProject.isPresent() ? "📁 Projectni almashtirish" : "📁 Project tanlash";
-    return new Screen(
-        html, List.of(List.of(new Button(switchLabel, Actions.NEW_MESSAGE + Actions.PROJECTS))));
+    List<List<Button>> rows = new ArrayList<>();
+    journalId.ifPresent(
+        id -> rows.add(List.of(new Button("✅ Task yaratish", Actions.taskFromTranscript(id)))));
+    rows.add(List.of(new Button(switchLabel, Actions.NEW_MESSAGE + Actions.PROJECTS)));
+    return new Screen(html, rows);
   }
 
   private static String listLabel(TranscriptRecord record, ZoneId zone) {

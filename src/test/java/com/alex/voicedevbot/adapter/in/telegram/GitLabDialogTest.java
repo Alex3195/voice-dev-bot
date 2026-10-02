@@ -14,12 +14,15 @@ import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.out.GitLabApi;
 import com.alex.voicedevbot.application.port.out.GitLabException;
 import com.alex.voicedevbot.application.port.out.GitLabException.Reason;
+import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageGitLabService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
+import com.alex.voicedevbot.application.service.ManageTasksService;
+import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.GitLabAddress;
@@ -64,21 +67,27 @@ class GitLabDialogTest {
         new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz"));
     Clock clock =
         Clock.fixed(GitLabFixtures.TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+    LinkRepoService repos =
+        new LinkRepoService(
+            access,
+            settings,
+            connections,
+            links,
+            api,
+            project -> Map.of("CLAUDE.md", "# " + project.value()),
+            clock);
+    BrowseTranscriptsService transcripts =
+        new BrowseTranscriptsService(access, new InMemoryTranscriptionLog());
+    ProjectRepoAccess repoAccess =
+        new ProjectRepoAccess(access, settings, connections, links, clock);
     return new BotConversation(
         new ManageProjectsService(access, projects, settings, settingsRepository),
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
-        new BrowseTranscriptsService(access, new InMemoryTranscriptionLog()),
-        new GitLabDialog(
-            new ManageGitLabService(access, connections, api, clock),
-            new LinkRepoService(
-                access,
-                settings,
-                connections,
-                links,
-                api,
-                project -> Map.of("CLAUDE.md", "# " + project.value()),
-                clock)),
+        transcripts,
+        new GitLabDialog(new ManageGitLabService(access, connections, api, clock), repos),
+        new TaskDialog(new ManageTasksService(repoAccess, api), repos, transcripts),
+        new DocsDialog(new BrowseDocsService(repoAccess, api)),
         ZoneOffset.UTC);
   }
 

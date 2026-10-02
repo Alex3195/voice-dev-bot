@@ -12,6 +12,7 @@ import java.lang.System.Logger.Level;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 /**
  * Audio'ni arxivga, transkriptni jurnalga yozadi. Bu — qo'shimcha: yozib bo'lmasa foydalanuvchi
@@ -34,7 +35,10 @@ public class TranscriptJournal {
     this.clock = Objects.requireNonNull(clock, "clock");
   }
 
-  public void record(
+  /**
+   * @return jurnaldagi yozuv raqami; yozib bo'lmasa — bo'sh
+   */
+  public OptionalLong record(
       UserSettings speaker, SourceAudio source, AudioClip clip, Transcription transcription) {
     Instant now = clock.instant();
     TranscriptRecord record = TranscriptRecord.of(speaker, transcription, source, now);
@@ -44,9 +48,10 @@ public class TranscriptJournal {
       LOG.log(Level.WARNING, "Failed to archive " + clip + ", logging transcript without it", e);
     }
     try {
-      log.append(record);
+      return OptionalLong.of(log.append(record));
     } catch (StorageException e) {
       LOG.log(Level.WARNING, "Failed to log transcript " + record, e);
+      return OptionalLong.empty();
     }
   }
 }

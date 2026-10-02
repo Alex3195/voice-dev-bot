@@ -7,14 +7,19 @@ import com.alex.voicedevbot.adapter.out.persistence.JdbcGitLabConnectionReposito
 import com.alex.voicedevbot.adapter.out.persistence.JdbcProjectRepoLinks;
 import com.alex.voicedevbot.adapter.out.persistence.TokenCipher;
 import com.alex.voicedevbot.adapter.out.template.ClasspathRepoTemplate;
+import com.alex.voicedevbot.application.port.in.BrowseDocsUseCase;
 import com.alex.voicedevbot.application.port.in.LinkRepoUseCase;
 import com.alex.voicedevbot.application.port.in.ManageGitLabUseCase;
+import com.alex.voicedevbot.application.port.in.ManageTasksUseCase;
 import com.alex.voicedevbot.application.port.in.TokenExpiryAlertsUseCase;
 import com.alex.voicedevbot.application.port.out.GitLabApi;
 import com.alex.voicedevbot.application.port.out.GitLabConnectionRepository;
 import com.alex.voicedevbot.application.port.out.ProjectRepoLinks;
+import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageGitLabService;
+import com.alex.voicedevbot.application.service.ManageTasksService;
+import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.TokenExpiryAlertsService;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
@@ -33,7 +38,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** GitLab ulanishlari, project ↔ repo va tokenlar muddatini kuzatish. */
+/** GitLab ulanishlari, project ↔ repo, tasklar, hujjatlar va tokenlar muddatini kuzatish. */
 @Configuration
 @EnableConfigurationProperties(SecretsProperties.class)
 class GitLabConfig {
@@ -93,6 +98,26 @@ class GitLabConfig {
       Clock clock) {
     return new LinkRepoService(
         accessPolicy, settings, connections, links, api, new ClasspathRepoTemplate(), clock);
+  }
+
+  @Bean
+  ProjectRepoAccess projectRepoAccess(
+      AccessPolicy accessPolicy,
+      UserSettingsLookup settings,
+      GitLabConnectionRepository connections,
+      ProjectRepoLinks links,
+      Clock clock) {
+    return new ProjectRepoAccess(accessPolicy, settings, connections, links, clock);
+  }
+
+  @Bean
+  ManageTasksUseCase manageTasksUseCase(ProjectRepoAccess access, GitLabApi api) {
+    return new ManageTasksService(access, api);
+  }
+
+  @Bean
+  BrowseDocsUseCase browseDocsUseCase(ProjectRepoAccess access, GitLabApi api) {
+    return new BrowseDocsService(access, api);
   }
 
   @Bean

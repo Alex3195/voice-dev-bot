@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.application.port.out.GitLabApi;
+import com.alex.voicedevbot.application.service.BrowseDocsService;
 import com.alex.voicedevbot.application.service.BrowseTranscriptsService;
 import com.alex.voicedevbot.application.service.ChangeLanguageService;
 import com.alex.voicedevbot.application.service.LinkRepoService;
 import com.alex.voicedevbot.application.service.ManageGitLabService;
 import com.alex.voicedevbot.application.service.ManageGlossaryService;
 import com.alex.voicedevbot.application.service.ManageProjectsService;
+import com.alex.voicedevbot.application.service.ManageTasksService;
+import com.alex.voicedevbot.application.service.ProjectRepoAccess;
 import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.AudioKind;
@@ -35,6 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -63,21 +67,27 @@ class BotConversationTest {
     AccessPolicy access = new AccessPolicy(Set.of(USER));
     UserSettingsLookup settings =
         new UserSettingsLookup(settingsRepository, new SpeechLanguage("uz"));
+    LinkRepoService repos =
+        new LinkRepoService(
+            access,
+            settings,
+            gitLabConnections,
+            repoLinks,
+            gitLabApi,
+            project -> java.util.Map.of("CLAUDE.md", project.value()),
+            clock);
+    BrowseTranscriptsService transcripts = new BrowseTranscriptsService(access, transcriptLog);
+    ProjectRepoAccess repoAccess =
+        new ProjectRepoAccess(access, settings, gitLabConnections, repoLinks, clock);
     return new BotConversation(
         new ManageProjectsService(access, projects, settings, settingsRepository),
         new ManageGlossaryService(access, projects, settings),
         new ChangeLanguageService(access, settings, settingsRepository),
-        new BrowseTranscriptsService(access, transcriptLog),
+        transcripts,
         new GitLabDialog(
-            new ManageGitLabService(access, gitLabConnections, gitLabApi, clock),
-            new LinkRepoService(
-                access,
-                settings,
-                gitLabConnections,
-                repoLinks,
-                gitLabApi,
-                project -> java.util.Map.of("CLAUDE.md", project.value()),
-                clock)),
+            new ManageGitLabService(access, gitLabConnections, gitLabApi, clock), repos),
+        new TaskDialog(new ManageTasksService(repoAccess, gitLabApi), repos, transcripts),
+        new DocsDialog(new BrowseDocsService(repoAccess, gitLabApi)),
         ZoneOffset.UTC);
   }
 
@@ -202,13 +212,16 @@ class BotConversationTest {
   }
 
   @Test
-  void should_keep_card_and_say_soon_for_unfinished_sections() {
-    projects.save(Project.named(ELT_IMZO));
+  void should_offer_repo_link_from_card_tasks_and_docs_when_project_has_no_repo() {
+    text("/addproject ELT imzo");
 
-    Reply reply = press(Actions.soon(ELT_IMZO.key()));
+    for (String section : List.of(Actions.TASKS, Actions.DOCS, Actions.TASK_NEW)) {
+      Screen screen = press(section).screen();
 
-    assertThat(reply.toast()).isEqualTo(BotConversation.SOON_TOAST);
-    assertThat(reply.screen().html()).startsWith("📁 <b>ELT imzo</b>");
+      assertThat(screen.html()).contains("<b>ELT imzo</b> hali GitLab repo'ga ulanmagan");
+      assertThat(actions(screen)).contains(Actions.REPO);
+    }
+    Mockito.verifyNoInteractions(gitLabApi);
   }
 
   @Test
@@ -274,7 +287,8 @@ class BotConversationTest {
         .endsWith("\n\nkassa &lt;bo'limi&gt;");
     assertThat(reply.screen().attachments())
         .containsExactly(new Screen.Attachment(AudioKind.VOICE, "file-15"));
-    assertThat(actions(reply.screen())).containsExactly(Actions.transcripts(ELT_IMZO.key(), 0));
+    assertThat(actions(reply.screen()))
+        .containsExactly(Actions.taskFromTranscript(1), Actions.transcripts(ELT_IMZO.key(), 0));
   }
 
   @Test
@@ -358,7 +372,7 @@ class BotConversationTest {
   void should_show_active_project_under_transcript_and_open_projects_in_new_message() {
     text("/addproject ELT imzo");
 
-    Screen transcript = conversation.transcript(USER, "kassa <bo'limi>");
+    Screen transcript = conversation.transcript(USER, "kassa <bo'limi>", OptionalLong.empty());
     Reply projectsReply = press(actions(transcript).getFirst());
 
     assertThat(transcript.html())
@@ -371,7 +385,7 @@ class BotConversationTest {
 
   @Test
   void should_offer_project_choice_under_transcript_when_none_is_active() {
-    Screen transcript = conversation.transcript(USER, "matn");
+    Screen transcript = conversation.transcript(USER, "matn", OptionalLong.empty());
 
     assertThat(transcript.html()).contains("project tanlanmagan");
     assertThat(labels(transcript)).containsExactly("📁 Project tanlash");

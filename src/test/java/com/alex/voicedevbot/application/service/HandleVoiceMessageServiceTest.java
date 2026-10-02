@@ -37,6 +37,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,7 +89,9 @@ class HandleVoiceMessageServiceTest {
 
     // then
     assertThat(result)
-        .isEqualTo(new VoiceHandlingResult.Transcribed(new Transcript("login sahifasini tuzat")));
+        .isEqualTo(
+            new VoiceHandlingResult.Transcribed(
+                new Transcript("login sahifasini tuzat"), OptionalLong.of(1)));
   }
 
   @Test
@@ -106,7 +109,8 @@ class HandleVoiceMessageServiceTest {
     VoiceHandlingResult result = serviceWith(log).handle(new VoiceMessage(ALLOWED, SOURCE));
 
     // then
-    assertThat(result).isEqualTo(new VoiceHandlingResult.Transcribed(new Transcript("matn")));
+    assertThat(result)
+        .isEqualTo(new VoiceHandlingResult.Transcribed(new Transcript("matn"), OptionalLong.of(1)));
   }
 
   @Test
@@ -138,7 +142,8 @@ class HandleVoiceMessageServiceTest {
 
     VoiceHandlingResult result = serviceWith(log).handle(new VoiceMessage(ALLOWED, SOURCE));
 
-    assertThat(result).isEqualTo(new VoiceHandlingResult.Transcribed(new Transcript("matn")));
+    assertThat(result)
+        .isEqualTo(new VoiceHandlingResult.Transcribed(new Transcript("matn"), OptionalLong.of(1)));
     assertThat(log.records()).singleElement().satisfies(r -> assertThat(r.archivePath()).isEmpty());
   }
 
@@ -151,7 +156,9 @@ class HandleVoiceMessageServiceTest {
 
     VoiceHandlingResult result = serviceWith(broken).handle(new VoiceMessage(ALLOWED, SOURCE));
 
-    assertThat(result).isEqualTo(new VoiceHandlingResult.Transcribed(new Transcript("matn")));
+    assertThat(result)
+        .isEqualTo(
+            new VoiceHandlingResult.Transcribed(new Transcript("matn"), OptionalLong.empty()));
   }
 
   @Test
