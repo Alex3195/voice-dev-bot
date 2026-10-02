@@ -23,19 +23,26 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
 D esa ovozdan task yaratishni qo'shadi. C va E tayyor.
 
-Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F, H, G va D1 tayyor —
-**keyingisi D2** (spetsifikatsiya fayli), keyin D3 (project xotirasi). PR D uch qismga bo'lindi: D1 — Claude
-qoralamasi, D2 — `docs/specs/` ga MR/PR orqali spetsifikatsiya, D3 — project xotirasi.
+Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F, H, G va D1 tayyor.
+PR D uch qismga bo'lindi: D1 — Claude qoralamasi, D2 — `docs/specs/` ga MR/PR orqali spetsifikatsiya, D3 — project
+xotirasi.
+
+**Keyingi tartib: I → J → D2 → D3.** D1 sinovida zaif bo'g'in Whisper chiqdi (qoraqalpoqcha talaffuzli nutqda
+~50–60%), Claude esa shu matndan ma'noni ~80% tiklaydi. Shuning uchun avval STT sifati: **PR I** — Claude tuzatgan
+transkriptni saqlash (J va fine-tuning uchun "to'g'ri matn"), **PR J** — arxivdagi audiolarda STT dvigatellarini
+o'lchab solishtirish.
 
 ## Asosiy qarorlar (nima uchun shunday)
 
 - **Whisper o'zbekchada zaif.** Turbo emas, to'liq `large-v3`; prompt'da lotin namunasi (usiz kirill/turkcha
   imloga o'tadi) + faol project lug'ati (xususiy nomlar: "ELT imzo", "Klaes", "PVX"). Sinovda lug'at atamalar
   aniqligini sezilarli oshirdi.
-- **Qoraqalpoqcha nutq** — Whisper'da bu til yo'q, `auto` uni qozoqcha deb aniqlaydi. Bunday user uchun `/lang kk`;
-  matnni o'zbekcha task'ga Claude aylantiradi. `language=auto` hamma uchun yoqilmaydi (qisqa o'zbekcha gaplarni
-  turkcha/qozoqcha deb adashtiradi).
+- **Qoraqalpoqcha nutq** — Whisper'da bu til yo'q. **O'lchandi (2026-10-02, bitta 67 s audio, `large-v3-q5_0`):**
+  `uz` — eng yaxshisi (~50–60%); `kk` — kirill qozoqcha va takrorlanish (gallyutsinatsiya), yaroqsiz; `auto` —
+  turkcha deb aniqlaydi. Demak qoraqalpoqcha talaffuzli o'zbekcha uchun ham `uz` qoladi, `/lang kk` tavsiya
+  qilinmaydi. Ma'noni Claude tiklaydi; Whisper'ning o'zini yaxshilash — PR I/J va fine-tuning.
 - **Whisper matni ~80% tushunarli bo'lsa yetarli** — ma'noni Claude tiklaydi, foydalanuvchi ✅/✏️ bilan tasdiqlaydi.
+  Haqiqatda qoraqalpoqcha talaffuzda Whisper ~50–60% beradi, Claude qoralamasi ma'noda ~80% (foydalanuvchi bahosi).
   Raqamlar va nomlar tasdiqlashda albatta ko'rsatiladi (Whisper ularda eng ko'p adashadi).
 - **Lug'at avtomatik "so'rash" bilan emas, "taklif" bilan to'ldiriladi** — har audio'dan keyin so'rash charchatadi.
   Claude tuzatgan atamalardan audio ostida ≤ 3 ta bir bosishli taklif.
@@ -139,7 +146,34 @@ qoralamasi, D2 — `docs/specs/` ga MR/PR orqali spetsifikatsiya, D3 — project
 - [x] Claude ishlayotganda bosilgan tugma "⏳ Claude qoralama tuzmoqda…" ga almashadi va bosilmaydi; qayta bosish
       ikkinchi so'rov yubormaydi (shu transkriptdan tuzilgan qoralama qayta ko'rsatiladi). Kredit tugasa — "💳".
 
-### D2 — Spetsifikatsiya (keyingi)
+## PR I — Claude tuzatgan transkript (keyingi)
+
+Maqsad: Whisper xatolari tuzatilgan to'liq matnni olish va saqlash. U foydalanuvchiga ko'rinadi, bazada STT'ni
+o'lchash (PR J) va Whisper fine-tuning uchun "to'g'ri javob" bo'ladi. Kichik PR, D1 ustiga quriladi.
+
+- [ ] Claude javob sxemasiga `corrected_transcript` qo'shiladi (`ClaudeTaskParser`). **Bu tarjima ham, qayta
+      yozish ham emas:** so'zlovchi aytgan so'zlar o'sha tartibda, faqat tanib olish xatolari tuzatiladi, lotin
+      yozuvida; qoraqalpoqcha talaffuzdagi so'zlar ham aytilganidek qoladi (fine-tuning'ga aynan aytilgani kerak).
+      Ko'rsatmaga shu aniq yoziladi. Narxi: output transkript uzunligicha ko'payadi (~+0.5–1 sent/task).
+- [ ] `TaskDraft` (yoki `ParsedTask`) ga tuzatilgan matn; jurnal: `transcription.corrected_text` (V2'da bor, hozir
+      bo'sh) — `TranscriptionLog.recordLlmUsage` o'rniga bitta chaqiruv: matn + `usage` birga yoziladi.
+- [ ] Telegram: tasdiq ekranida `📝 Tuzatilgan matn` tugmasi (uzun — alohida yangi xabar bo'lib chiqadi); transkript
+      kartochkasida (📝 Transkriptlar → yozuv) tuzatilgan matn ham ko'rinadi, bo'lsa.
+- [ ] `confirmed_text` (V2'da bor): foydalanuvchi task'ni `✅ Yaratish` bilan tasdiqlasa, tuzatilgan matn
+      "tasdiqlangan" deb ko'chiriladi — fine-tuning uchun eng ishonchli yozuvlar shular. Matnni qo'lda tahrirlash
+      — keyin (kerak bo'lsa).
+- [ ] Testlar: WireMock (sxemada maydon, javobdan o'qish), service (jurnalga yozish, xato yo'li), JDBC
+      (`corrected_text`, `confirmed_text`), dialog (tugma, tasdiqda ko'chirish).
+
+## PR J — STT dvigatellarini o'lchash
+
+- [ ] Arxivdagi audio + `confirmed_text` (PR I) bo'yicha WER (so'z xatosi foizi) hisoblovchi skript/test-harness.
+- [ ] Solishtirish: hozirgi whisper.cpp `large-v3-q5_0` (`uz`), to'liq `large-v3`, va o'zbek tilini qo'llaydigan
+      bir-ikkita tijoriy STT (har biri `SpeechToText` porti orqali adapter). Tijoriy xizmatlar — kalit va xarajat
+      uchun ruxsat bilan.
+- [ ] Natija bo'yicha qaror: dvigatelni almashtirish yoki fine-tuning'ga o'tish ("Keyin" bo'limi).
+
+### D2 — Spetsifikatsiya
 
 - [ ] **Spetsifikatsiya** (`.ai/task-template.md` formatida) → project repo'siga `docs/specs/<raqam>-<nom>.md`
       (MR/PR orqali) + Issue (`ai-task` label, spetsifikatsiyaga havola). Project kartochkasidagi
