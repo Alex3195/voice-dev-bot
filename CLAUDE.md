@@ -33,8 +33,8 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 8. **Prod'ga faqat qo'lda tasdiq bilan** (GitLab protected environments).
 
 ## Multi-project dizayn
-- Projectlar bot bazasida (PostgreSQL): `/addproject`, `/project`. Har project bitta **GitLab repo**'ga bog'lanadi (mavjudini tanlash yoki yangisini yaratish).
-- GitLab ulanishlari bot ichida boshqariladi: gitlab.com, self-hosted yoki boshqa istalgan GitLab — `{base_url, token}`; token tekshiriladi, tugash sanasi kuzatiladi va yangilanadi (roadmap → PR C).
+- Projectlar bot bazasida (PostgreSQL): `/addproject`, `/project`. Har project bitta **GitLab yoki GitHub repo**'ga bog'lanadi (mavjudini tanlash yoki yangisini yaratish).
+- Ulanishlar bot ichida (`⚙️ → 🔗 Ulanishlar`) boshqariladi: GitLab (gitlab.com yoki self-hosted), GitHub (github.com), keyin Jira — `{provider, base_url, token}`; bitta token shu serverdagi barcha projectlar uchun, tekshiriladi, tugash sanasi kuzatiladi va yangilanadi.
 - Har projectning **atamalar lug'ati** bazada (`/glossary`), `.env`da emas. Faol project lug'ati Whisper prompt'iga qo'shiladi; `TaskParser` esa barcha projectlar lug'atini ko'radi va projectni o'zi aniqlaydi.
 - `/project` buyrug'i yoki ovozda project nomi aytilsa LLM ajratadi; topolmasa so'raydi.
 - Har foydalanuvchining nutq tili (`/lang`): Whisper'da qoraqalpoq tili yo'q, bunday foydalanuvchilar uchun `kk` eng yaqini.
@@ -67,7 +67,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 ## Xavfsizlik
 - Faqat whitelist Telegram ID'dan buyruq qabul qilinadi.
 - Kalitlar (Telegram, Claude, shifrlash kaliti) faqat `.env`da, repo'ga commit qilinmaydi (`.gitignore`).
-- GitLab tokenlari bazada **shifrlangan** (AES-GCM, kalit `.env`da); logga va javobga tushmaydi, botda niqoblangan; token yozilgan xabar chatdan o'chiriladi.
+- Ulanish tokenlari (GitLab, GitHub) bazada **shifrlangan** (AES-GCM, kalit `.env`da); logga va javobga tushmaydi, botda niqoblangan; token yozilgan xabar chatdan o'chiriladi.
 - Agent `main`'ga to'g'ridan-to'g'ri push qila olmasin (branch protection), faqat feature branch + PR.
 
 ## Bosqichlar
@@ -78,12 +78,12 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 
 ## Holat
 - 1-bosqich boshlangan: bot whitelist'dagi user'dan voice qabul qiladi, Telegram'dan yuklab, `SpeechToText` portiga beradi va matnni qaytaradi. STT — `WhisperCppSpeechToText` (whisper.cpp server); `STT_ENGINE=stub` bilan Whisper'siz ishlatish mumkin. Voice, audio fayl, video, video xabar qabul qilinadi (20 MB gacha).
-- Projectlar, lug'at va foydalanuvchi tili — PostgreSQL (`compose.yaml`, port 5433), Flyway, oddiy JDBC (Spring faqat `config`da). Boshqaruv inline tugmalar bilan (`BotConversation` + `BotScreens`; GitLab oqimi — `GitLabDialog` + `GitLabScreens`), buyruqlar qisqa yo'l sifatida: `/start`, `/project`, `/addproject`, `/glossary`, `/settings`, `/lang`, `/help`.
-- Har transkript jurnalga yoziladi (`transcription` jadvali: prompt, model, matn, Telegram `file_id`), audio diskda (`AUDIO_ARCHIVE_DIR`). Jurnal xatosi botni to'xtatmaydi. Project kartochkasi: transkriptlar, lug'at, repo; ⚙️ Sozlamalar: til, GitLab, projectsiz transkriptlar.
-- GitLab ulanishlari (gitlab.com / self-hosted): token GitLab'da tekshiriladi (`api` scope), bazada AES-GCM bilan shifrlangan (`SECRETS_KEY`), tugashidan 7 kun oldin kunlik ogohlantirish. Project ↔ repo: mavjudini tanlash yoki shablon bilan yangisini yaratish (`src/main/resources/repo-template/`).
-- ✅ Tasklar (project kartochkasida): repo'dagi GitLab Issue'lar holat bo'yicha guruhlab (⏰ muddati o'tgan · 🟢 ochiq · 🔀 MR ochilgan · ✅ bajarilgan · ⚪ yopiq), yopish/qayta ochish, `➕ Yangi task` va transkript ostida `✅ Task yaratish` — tasdiqdan keyin, `ai-task` label bilan. 📄 Hujjatlar: repo'dagi `CLAUDE.md`, `README.md`, `docs/**/*.md`, sahifalab.
-- Tayyor: PR #1–#3 (STT, audio turlari, projectlar/lug'at/til, tugmali interfeys), #5 (PR B: jurnal, kartochka, sozlamalar), #6 (PR C: GitLab ulanishlari, repo), #7 (PR E: tasklar va hujjatlar).
-- **Keyingi: PR F** — ulanishlar bir nechta provayder uchun (GitLab, GitHub; keyin Jira), keyin PR G (repo'ni URL bilan ulash), PR H (GitHub), so'ng PR D (Claude TaskParser). Reja: [docs/roadmap.md](docs/roadmap.md).
+- Projectlar, lug'at va foydalanuvchi tili — PostgreSQL (`compose.yaml`, port 5433), Flyway, oddiy JDBC (Spring faqat `config`da). Boshqaruv inline tugmalar bilan (`BotConversation` + `BotScreens`; ulanishlar va repo — `ConnectionsDialog` + `ConnectionScreens`; tasklar — `TaskDialog`; hujjatlar — `DocsDialog`), buyruqlar qisqa yo'l sifatida: `/start`, `/project`, `/addproject`, `/glossary`, `/settings`, `/lang`, `/help`.
+- Har transkript jurnalga yoziladi (`transcription` jadvali: prompt, model, matn, Telegram `file_id`), audio diskda (`AUDIO_ARCHIVE_DIR`). Jurnal xatosi botni to'xtatmaydi. Project kartochkasi: transkriptlar, lug'at, repo; ⚙️ Sozlamalar: til, 🔗 Ulanishlar, projectsiz transkriptlar.
+- Ulanishlar (`⚙️ → 🔗 Ulanishlar`): GitLab (gitlab.com / self-hosted, `api` scope) va GitHub (github.com; fine-grained yoki classic `repo`). Bitta ulanish (xizmat + server + token egasi) shu serverdagi barcha projectlar uchun; token xizmatda tekshiriladi, bazada AES-GCM bilan shifrlangan (`SECRETS_KEY` — `.env`da, bir marta), ro'yxatda holati va tugash sanasi, tugashidan 7 kun oldin kunlik ogohlantirish. Adapterlar `CodeHost` + `IssueTracker` portlari orqali, provayder bo'yicha `Integrations` tanlaydi (Jira keyin — faqat `IssueTracker`). Project ↔ repo: mavjudini tanlash yoki shablon bilan yangisini yaratish (`src/main/resources/repo-template/`).
+- ✅ Tasklar (project kartochkasida): repo'dagi Issue'lar (GitLab/GitHub) holat bo'yicha guruhlab (⏰ muddati o'tgan · 🟢 ochiq · 🔀 MR ochilgan · ✅ bajarilgan · ⚪ yopiq), yopish/qayta ochish, `➕ Yangi task` va transkript ostida `✅ Task yaratish` — tasdiqdan keyin, `ai-task` label bilan. 📄 Hujjatlar: repo'dagi `CLAUDE.md`, `README.md`, `docs/**/*.md`, sahifalab.
+- Tayyor: PR #1–#3 (STT, audio turlari, projectlar/lug'at/til, tugmali interfeys), #5 (PR B: jurnal, kartochka, sozlamalar), #6 (PR C: GitLab ulanishlari, repo), #7 (PR E: tasklar va hujjatlar), #9 (PR F: ko'p provayderli ulanishlar), #10 (PR H: GitHub).
+- **Keyingi: PR G** — repo'ni URL bilan ulash (GitLab va GitHub; faol token bo'lsa darhol, bo'lmasa token so'raladi), keyin PR D (Claude TaskParser). Jira va GitHub Enterprise — keyin. Reja: [docs/roadmap.md](docs/roadmap.md).
 - Ma'lum muammo: TelegramBots 10.3 `downloadFileAsStream` API manzilini e'tiborsiz qoldiradi va HTTP statusni tekshirmaydi — shuning uchun `TelegramAudioSource` faylni `java.net.http.HttpClient` bilan o'zi yuklaydi.
 - Bot repo'si GitHub'da (`Alex3195/voice-dev-bot`): agent lokal yozadi, feature branch'ga push qiladi va `gh` bilan PR ochadi; `main`ga merge — faqat inson (`.claude/hooks/block-main.sh`).
-- Dev'da ishga tushirish: `docker compose up -d postgres`, `scripts/whisper-dev.sh`, `./gradlew bootRun` (`.env`da `SECRETS_KEY` bo'lishi shart). Testlar Docker talab qiladi (Testcontainers).
+- Dev'da ishga tushirish: `docker compose up -d postgres`, `scripts/whisper-dev.sh`, `./gradlew bootRun` (`.env`da `SECRETS_KEY` bo'lishi shart — faqat `openssl rand -base64 32` qiymati, qo'lda yozilgan qiymat Base64 xatosi beradi). Testlar Docker talab qiladi (Testcontainers).

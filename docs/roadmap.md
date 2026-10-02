@@ -15,12 +15,14 @@ bo'yicha: katta PR'dan oldin qisqa reja ko'rsatiladi, `./gradlew check` yashil, 
 | #5 | Transkripsiya jurnali + audio arxivi, project kartochkasi, ⚙️ Sozlamalar (PR B) |
 | #6 | GitLab ulanishlari (shifrlangan token, muddat ogohlantirishi), project ↔ repo (PR C) |
 | #7 | ✅ Tasklar (Issue'lar holat bo'yicha guruhlab, yaratish/yopish, transkriptdan task) va 📄 Hujjatlar (PR E) |
+| #9 | Ulanishlar bir nechta provayder uchun: `🔗 Ulanishlar`, `CodeHost` / `IssueTracker`, V4 migratsiya (PR F) |
+| #10 | GitHub (github.com): token, repo'lar, hujjatlar, Issues, PR'lar (PR H) |
 
 Tartib: **C → E → D** — GitLab ulanishi hammasining asosi; E tasklar va hujjatlarni qo'lda boshqarishni beradi,
 D esa ovozdan task yaratishni qo'shadi. C va E tayyor.
 
-Keyingi tartib: **F → G → H → D**. Ulanishlar umumiy bo'ladi (GitLab, GitHub, keyin Jira), repo URL bilan
-ulanadi, keyin GitHub qo'shiladi va shundan so'ng ovozdan task (D).
+Keyingi tartib: F → G → H → D edi; GitHub kerak bo'lgani uchun H G'dan oldin qilindi. F va H tayyor —
+**keyingisi G** (repo'ni URL bilan ulash, GitLab va GitHub uchun birdan), keyin D (ovozdan task).
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -77,27 +79,32 @@ ulanadi, keyin GitHub qo'shiladi va shundan so'ng ovozdan task (D).
       `docs/roadmap.md`, `docs/decisions/NNN-*.md` (qarorlar, ADR), `docs/specs/NNN-*.md` (TZ/spetsifikatsiya),
       `CLAUDE.md`. Uzun hujjat bo'laklab ko'rsatiladi.
 
-## PR F — Ulanishlar: bir nechta provayder
+## PR F — Ulanishlar: bir nechta provayder (tayyor, #9)
 
-- [ ] Har ulanishda provayder turi bor: GitLab, GitHub, keyin Jira. Bitta ulanish (server + token egasi) shu
+- [x] Har ulanishda provayder turi bor: GitLab, GitHub, keyin Jira. Bitta ulanish (server + token egasi) shu
       serverdagi **barcha projectlar** uchun ishlatiladi — token har project uchun qayta so'ralmaydi.
-- [ ] `⚙️ Sozlamalar → 🔗 Ulanishlar`: hamma provayderlar bitta ro'yxatda — holati (🟢 faol · ⚠️ tugayapti ·
+- [x] `⚙️ Sozlamalar → 🔗 Ulanishlar`: hamma provayderlar bitta ro'yxatda — holati (🟢 faol · ⚠️ tugayapti ·
       ⛔ tugagan) va tugash sanasi bilan; ➕ qo'shish, 🔑 yangilash, 🗑 o'chirish.
-- [ ] Port ikkiga bo'linadi: `CodeHost` (repo, fayllar, MR/PR) va `IssueTracker` (tasklar). Jira faqat
+- [x] Port ikkiga bo'linadi: `CodeHost` (repo, fayllar, MR/PR) va `IssueTracker` (tasklar). Jira faqat
       `IssueTracker` bo'ladi — project kodi bir joyda, tasklari boshqa joyda bo'lishi mumkin.
-- [ ] Mavjud GitLab ulanishlari migratsiya bilan saqlanadi.
+- [x] Mavjud GitLab ulanishlari migratsiya bilan saqlanadi (`provider_connection`, V4).
+- Qaror: `SECRETS_KEY` (tokenlarni shifrlash kaliti) `.env`da qoladi — bir marta, `openssl rand -base64 32`;
+  kalit bazada bo'lsa shifrlash ma'nosiz. Git tokenlarining o'zi — faqat Settings orqali, bazada.
 
-## PR G — Repo'ni URL bilan ulash
+## PR G — Repo'ni URL bilan ulash (keyingi)
 
-- [ ] Repo URL yuboriladi → bot provayder, server va repo yo'lini o'zi aniqlaydi.
+- [ ] Repo URL yuboriladi → bot provayder (GitLab/GitHub), server va repo yo'lini o'zi aniqlaydi
+      (`https://github.com/egasi/nomi`, `https://git.firma.uz/guruh/ichki/nomi`, `.git` va `/-/…` qismlari bilan ham).
+      Self-hosted server qaysi provayder ekanini bilish uchun avval mavjud ulanishlar tekshiriladi.
 - [ ] O'sha server uchun faol token bo'lsa — darhol ulanadi; yo'q yoki tugagan bo'lsa — token so'raladi,
       tekshiriladi, saqlanadi (muddati tugaguncha ishlatiladi), keyin repo ulanadi.
 - [ ] Ro'yxatdan tanlash va yangi repo yaratish ham qoladi.
 
-## PR H — GitHub (github.com)
+## PR H — GitHub (github.com) (tayyor, #10)
 
-- [ ] GitHub token (fine-grained yoki classic `repo`), tekshirish va muddat — GitLab kabi.
-- [ ] Repo'lar, hujjatlar, Issues (tasklar) va Pull Request'lar.
+- [x] GitHub token (fine-grained yoki classic `repo`), tekshirish va muddat — GitLab kabi.
+- [x] Repo'lar, hujjatlar, Issues (tasklar) va Pull Request'lar. GitHub'da issue muddati yo'q — "⏰ muddati
+      o'tgan" guruhi bo'lmaydi; "MR ochilgan" — `linked:pr` qidiruvi, PR'lar — issue timeline'idan.
 - [ ] GitHub Enterprise — hozircha yo'q, keyin qo'shilishi mumkin.
 
 ## PR D — Claude TaskParser

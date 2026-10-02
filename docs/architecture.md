@@ -50,14 +50,17 @@ Telegram Update
 
 Telegram matn / "/buyruq" / inline tugma
   → adapter/in/telegram/BotConversation       (ekranlar: BotScreens)
-      GitLab tugmalari ("gl…") va kutilayotgan kiritish → GitLabDialog (ekranlar: GitLabScreens)
+      Ulanishlar va repo tugmalari ("cn…") va kutilayotgan kiritish → ConnectionsDialog (ConnectionScreens)
       Tasklar ("tk…", yangi task qoralamasi) → TaskDialog (TaskScreens); hujjatlar ("dc…") → DocsDialog (DocScreens)
   → ManageProjectsUseCase | ManageGlossaryUseCase | ChangeLanguageUseCase | BrowseTranscriptsUseCase
-    | ManageGitLabUseCase | LinkRepoUseCase | ManageTasksUseCase | BrowseDocsUseCase
+    | ManageConnectionsUseCase | LinkRepoUseCase | ManageTasksUseCase | BrowseDocsUseCase
                                                                (har biri whitelist'ni tekshiradi)
       Tasklar va hujjatlar → ProjectRepoAccess (whitelist, faol project, repo, token; xato → RepoUnavailable)
-      GitLabApi → adapter/out/gitlab/GitLabHttpApi (REST v4, PRIVATE-TOKEN)
-      GitLabConnectionRepository → JdbcGitLabConnectionRepository (token: TokenCipher, AES-GCM)
+      Integrations: ulanishning provayderi bo'yicha adapter (config'da ro'yxatga olinadi)
+        CodeHost (token, repo, fayllar, MR/PR) + IssueTracker (tasklar):
+          GITLAB → adapter/out/gitlab/GitLabHttpApi (REST v4, PRIVATE-TOKEN)
+          GITHUB → adapter/out/github/GitHubHttpApi (REST, Bearer; api.github.com)
+      ConnectionRepository → JdbcConnectionRepository (provider_connection; token: TokenCipher, AES-GCM)
       ProjectRepoLinks → JdbcProjectRepoLinks; RepoTemplate → adapter/out/template/ClasspathRepoTemplate
   ← sealed natija → Screen (AccessDenied → jim); token yozilgan xabar VoiceDevBot tomonidan o'chiriladi
 
