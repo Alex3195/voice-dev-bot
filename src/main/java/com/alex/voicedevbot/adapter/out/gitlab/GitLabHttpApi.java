@@ -135,25 +135,25 @@ public class GitLabHttpApi implements CodeHost, IssueTracker {
   }
 
   @Override
-  public List<Task> issues(ProviderConnection connection, long repoId, int limit) {
+  public List<Task> issues(ProviderConnection connection, Repo repo, int limit) {
     List<Task> result = new ArrayList<>();
     pages(
         connection,
-        "/projects/" + repoId + "/issues?scope=all&state=all&order_by=created_at&sort=desc",
+        "/projects/" + repo.id() + "/issues?scope=all&state=all&order_by=created_at&sort=desc",
         limit,
         issue -> result.add(taskOf(issue)));
     return result;
   }
 
   @Override
-  public Task issue(ProviderConnection connection, long repoId, long iid) {
-    return taskOf(get(connection, issuePath(repoId, iid)));
+  public Task issue(ProviderConnection connection, Repo repo, long iid) {
+    return taskOf(get(connection, issuePath(repo.id(), iid)));
   }
 
   @Override
-  public List<MergeRequest> mergeRequests(ProviderConnection connection, long repoId, long iid) {
+  public List<MergeRequest> mergeRequests(ProviderConnection connection, Repo repo, long iid) {
     List<MergeRequest> result = new ArrayList<>();
-    get(connection, issuePath(repoId, iid) + "/related_merge_requests")
+    get(connection, issuePath(repo.id(), iid) + "/related_merge_requests")
         .forEach(
             mergeRequest ->
                 result.add(
@@ -167,30 +167,30 @@ public class GitLabHttpApi implements CodeHost, IssueTracker {
 
   @Override
   public Task createIssue(
-      ProviderConnection connection, long repoId, NewTask task, List<String> labels) {
+      ProviderConnection connection, Repo repo, NewTask task, List<String> labels) {
     ObjectNode issue = json.createObjectNode();
     issue.put("title", task.title());
     issue.put("description", task.description());
     issue.put("labels", String.join(",", labels));
-    return taskOf(post(connection, "/projects/" + repoId + "/issues", issue));
+    return taskOf(post(connection, "/projects/" + repo.id() + "/issues", issue));
   }
 
   @Override
-  public Task setIssueOpen(ProviderConnection connection, long repoId, long iid, boolean open) {
+  public Task setIssueOpen(ProviderConnection connection, Repo repo, long iid, boolean open) {
     ObjectNode change = json.createObjectNode();
     change.put("state_event", open ? "reopen" : "close");
-    return taskOf(put(connection, issuePath(repoId, iid), change));
+    return taskOf(put(connection, issuePath(repo.id(), iid), change));
   }
 
   @Override
   public List<String> files(
-      ProviderConnection connection, long repoId, String directory, boolean recursive) {
+      ProviderConnection connection, Repo repo, String directory, boolean recursive) {
     String path = directory.isEmpty() ? "" : "&path=" + encode(directory);
     List<String> result = new ArrayList<>();
     try {
       pages(
           connection,
-          "/projects/" + repoId + "/repository/tree?recursive=" + recursive + path,
+          "/projects/" + repo.id() + "/repository/tree?recursive=" + recursive + path,
           MAX_FILES,
           entry -> {
             if ("blob".equals(entry.path("type").asString())) {
@@ -207,8 +207,8 @@ public class GitLabHttpApi implements CodeHost, IssueTracker {
   }
 
   @Override
-  public Optional<String> readFile(ProviderConnection connection, long repoId, String path) {
-    String request = "/projects/" + repoId + "/repository/files/" + encodeSegment(path) + "/raw";
+  public Optional<String> readFile(ProviderConnection connection, Repo repo, String path) {
+    String request = "/projects/" + repo.id() + "/repository/files/" + encodeSegment(path) + "/raw";
     try {
       return Optional.of(
           sendForText(

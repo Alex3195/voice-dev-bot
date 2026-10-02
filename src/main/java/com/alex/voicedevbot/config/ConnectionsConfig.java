@@ -2,6 +2,7 @@ package com.alex.voicedevbot.config;
 
 import com.alex.voicedevbot.adapter.in.telegram.TokenExpiryNotifier;
 import com.alex.voicedevbot.adapter.in.telegram.VoiceDevBot;
+import com.alex.voicedevbot.adapter.out.github.GitHubHttpApi;
 import com.alex.voicedevbot.adapter.out.gitlab.GitLabHttpApi;
 import com.alex.voicedevbot.adapter.out.persistence.JdbcConnectionRepository;
 import com.alex.voicedevbot.adapter.out.persistence.JdbcProjectRepoLinks;
@@ -25,6 +26,7 @@ import com.alex.voicedevbot.application.service.UserSettingsLookup;
 import com.alex.voicedevbot.domain.AccessPolicy;
 import com.alex.voicedevbot.domain.Provider;
 import com.alex.voicedevbot.domain.TelegramUserId;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
@@ -47,6 +49,7 @@ class ConnectionsConfig {
 
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+  private static final URI GITHUB_API = URI.create("https://api.github.com");
 
   /**
    * Ogohlantirish kuniga bir marta (bazada belgilanadi); tekshiruv tez-tez — sana o'tishini sezish
@@ -71,7 +74,7 @@ class ConnectionsConfig {
     return new JdbcProjectRepoLinks(dataSource);
   }
 
-  /** Har xizmat adapteri shu yerda ro'yxatga olinadi; GitHub — roadmap → PR H. */
+  /** Har xizmat adapteri shu yerda ro'yxatga olinadi (Jira — keyin, faqat tasklar uchun). */
   @Bean
   Integrations integrations() {
     HttpClient httpClient =
@@ -80,7 +83,10 @@ class ConnectionsConfig {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
     GitLabHttpApi gitLab = new GitLabHttpApi(httpClient, REQUEST_TIMEOUT);
-    return new Integrations(Map.of(Provider.GITLAB, gitLab), Map.of(Provider.GITLAB, gitLab));
+    GitHubHttpApi gitHub = new GitHubHttpApi(httpClient, REQUEST_TIMEOUT, GITHUB_API);
+    return new Integrations(
+        Map.of(Provider.GITLAB, gitLab, Provider.GITHUB, gitHub),
+        Map.of(Provider.GITLAB, gitLab, Provider.GITHUB, gitHub));
   }
 
   @Bean

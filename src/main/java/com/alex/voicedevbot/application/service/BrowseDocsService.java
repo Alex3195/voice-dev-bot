@@ -32,8 +32,8 @@ public class BrowseDocsService implements BrowseDocsUseCase {
         user,
         repo -> {
           List<String> paths =
-              new ArrayList<>(repo.code().files(repo.connection(), repo.repoId(), "", false));
-          paths.addAll(repo.code().files(repo.connection(), repo.repoId(), DOCS_DIRECTORY, true));
+              new ArrayList<>(repo.code().files(repo.connection(), repo.repo(), "", false));
+          paths.addAll(repo.code().files(repo.connection(), repo.repo(), DOCS_DIRECTORY, true));
           List<String> documents =
               paths.stream()
                   .filter(BrowseDocsService::isDocument)
@@ -56,7 +56,7 @@ public class BrowseDocsService implements BrowseDocsUseCase {
             return new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND);
           }
           return repo.code()
-              .readFile(repo.connection(), repo.repoId(), path)
+              .readFile(repo.connection(), repo.repo(), path)
               .<DocsResult>map(content -> new DocsResult.Opened(repo.project(), path, content))
               .orElseGet(() -> new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));
         });

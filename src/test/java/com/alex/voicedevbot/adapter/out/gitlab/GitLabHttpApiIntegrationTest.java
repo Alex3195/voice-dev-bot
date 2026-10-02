@@ -55,6 +55,9 @@ class GitLabHttpApiIntegrationTest {
        "web_url": "https://gitlab.example/alex/elt-imzo", "name": "elt-imzo"}
       """;
 
+  private static final Repo REPO_42 =
+      new Repo(42, "alex/elt-imzo", URI.create("https://gitlab.example/alex/elt-imzo"));
+
   @RegisterExtension
   static WireMockExtension gitLab =
       WireMockExtension.newInstance().options(wireMockConfig().dynamicPort()).build();
@@ -253,8 +256,8 @@ class GitLabHttpApiIntegrationTest {
                         + issueJson(102, "opened", null, 0)
                         + "]")));
 
-    List<Task> all = api.issues(connection, 42, 500);
-    List<Task> limited = api.issues(connection, 42, 101);
+    List<Task> all = api.issues(connection, REPO_42, 500);
+    List<Task> limited = api.issues(connection, REPO_42, 101);
 
     assertThat(all).hasSize(102);
     assertThat(all.get(100))
@@ -284,8 +287,8 @@ class GitLabHttpApiIntegrationTest {
                      {"iid": 5, "title": "Wip", "state": "locked", "web_url": "https://mr/5"}]
                     """)));
 
-    assertThat(api.issue(connection, 42, 7).open()).isTrue();
-    assertThat(api.mergeRequests(connection, 42, 7))
+    assertThat(api.issue(connection, REPO_42, 7).open()).isTrue();
+    assertThat(api.mergeRequests(connection, REPO_42, 7))
         .extracting(MergeRequest::state)
         .containsExactly(
             MergeRequest.State.MERGED, MergeRequest.State.CLOSED, MergeRequest.State.OPENED);
@@ -297,7 +300,8 @@ class GitLabHttpApiIntegrationTest {
         post("/api/v4/projects/42/issues").willReturn(okJson(issueJson(8, "opened", null, 0))));
 
     Task created =
-        api.createIssue(connection, 42, new NewTask("Login", "Parol"), List.of("ai-task", "bot"));
+        api.createIssue(
+            connection, REPO_42, new NewTask("Login", "Parol"), List.of("ai-task", "bot"));
 
     assertThat(created.iid()).isEqualTo(8);
     gitLab.verify(
@@ -314,7 +318,7 @@ class GitLabHttpApiIntegrationTest {
     gitLab.stubFor(
         put("/api/v4/projects/42/issues/7").willReturn(okJson(issueJson(7, state, null, 0))));
 
-    Task task = api.setIssueOpen(connection, 42, 7, open);
+    Task task = api.setIssueOpen(connection, REPO_42, 7, open);
 
     assertThat(task.open()).isEqualTo(open);
     gitLab.verify(
@@ -337,9 +341,9 @@ class GitLabHttpApiIntegrationTest {
         get("/api/v4/projects/42/repository/tree?recursive=false&per_page=100&page=1")
             .willReturn(okJson("[{\"path\": \"CLAUDE.md\", \"type\": \"blob\"}]")));
 
-    assertThat(api.files(connection, 42, "docs", true))
+    assertThat(api.files(connection, REPO_42, "docs", true))
         .containsExactly("docs/specs/001-login.md", "docs/roadmap.md");
-    assertThat(api.files(connection, 42, "", false)).containsExactly("CLAUDE.md");
+    assertThat(api.files(connection, REPO_42, "", false)).containsExactly("CLAUDE.md");
   }
 
   @Test
@@ -349,7 +353,7 @@ class GitLabHttpApiIntegrationTest {
             .willReturn(
                 aResponse().withStatus(404).withBody("{\"message\": \"404 Tree Not Found\"}")));
 
-    assertThat(api.files(connection, 42, "docs", true)).isEmpty();
+    assertThat(api.files(connection, REPO_42, "docs", true)).isEmpty();
   }
 
   @Test
@@ -358,7 +362,7 @@ class GitLabHttpApiIntegrationTest {
         get("/api/v4/projects/42/repository/files/docs%2Fmy%20notes.md/raw")
             .willReturn(aResponse().withBody("# Eslatma\n<b>")));
 
-    assertThat(api.readFile(connection, 42, "docs/my notes.md")).contains("# Eslatma\n<b>");
+    assertThat(api.readFile(connection, REPO_42, "docs/my notes.md")).contains("# Eslatma\n<b>");
   }
 
   @Test
@@ -370,8 +374,8 @@ class GitLabHttpApiIntegrationTest {
         get("/api/v4/projects/42/repository/files/README.md/raw")
             .willReturn(aResponse().withStatus(403)));
 
-    assertThat(api.readFile(connection, 42, "CLAUDE.md")).isEmpty();
-    assertThatThrownBy(() -> api.readFile(connection, 42, "README.md"))
+    assertThat(api.readFile(connection, REPO_42, "CLAUDE.md")).isEmpty();
+    assertThatThrownBy(() -> api.readFile(connection, REPO_42, "README.md"))
         .isInstanceOfSatisfying(
             IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.FORBIDDEN));
   }
@@ -382,7 +386,7 @@ class GitLabHttpApiIntegrationTest {
         get(urlPathEqualTo("/api/v4/projects/42/repository/tree"))
             .willReturn(aResponse().withStatus(401)));
 
-    assertThatThrownBy(() -> api.files(connection, 42, "", false))
+    assertThatThrownBy(() -> api.files(connection, REPO_42, "", false))
         .isInstanceOfSatisfying(
             IntegrationException.class, e -> assertThat(e.reason()).isEqualTo(Reason.UNAUTHORIZED));
   }

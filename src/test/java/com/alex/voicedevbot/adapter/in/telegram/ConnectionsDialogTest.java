@@ -282,7 +282,7 @@ class ConnectionsDialogTest {
     Screen noConnection = press(Actions.REPO).screen();
 
     assertThat(noProject.html()).startsWith("🔗 Repo projectga ulanadi");
-    assertThat(noConnection.html()).contains("Avval xizmat (GitLab) tokenini qo'shing");
+    assertThat(noConnection.html()).contains("Avval GitLab yoki GitHub tokenini qo'shing");
     assertThat(actions(noConnection)).contains(Actions.CONNECTION_ADD);
   }
 
@@ -375,5 +375,24 @@ class ConnectionsDialogTest {
     Screen rejected = text(TOKEN.value());
 
     assertThat(rejected.html()).startsWith("⚠️ Bu xizmat hali qo'llab-quvvatlanmaydi.");
+  }
+
+  @Test
+  void should_offer_github_without_self_hosted_option_and_explain_token() {
+    Screen choose = ConnectionScreens.chooseProvider(List.of(Provider.GITLAB, Provider.GITHUB));
+    Screen ask = ConnectionScreens.askToken(Provider.GITHUB, ServerAddress.GITHUB_COM);
+
+    assertThat(labels(choose))
+        .containsExactly(
+            "🦊 gitlab.com",
+            "✍️ GitLab — o'z serveri (self-hosted)",
+            "🐙 github.com",
+            "✖️ Bekor qilish");
+    assertThat(actions(choose)).contains(Actions.connectDefault(Provider.GITHUB));
+    assertThat(ask.html())
+        .startsWith("🔑 <b>🐙 github.com</b> uchun token yuboring.")
+        .contains("https://github.com/settings/personal-access-tokens/new")
+        .contains("Contents, Issues, Pull requests")
+        .contains("<code>repo</code>");
   }
 }

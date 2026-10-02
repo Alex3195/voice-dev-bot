@@ -6,7 +6,6 @@ import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -108,8 +107,8 @@ class DocsDialogTest {
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
     connection = connections.save(Provider.GITLAB, ServerAddress.GITLAB_COM, TOKEN, VALID);
     links.link(ELT_IMZO, new RepoLink(connection.id(), REPO));
-    when(api.files(connection, REPO.id(), "", false)).thenReturn(List.of("CLAUDE.md"));
-    when(api.files(connection, REPO.id(), "docs", true))
+    when(api.files(connection, REPO, "", false)).thenReturn(List.of("CLAUDE.md"));
+    when(api.files(connection, REPO, "docs", true))
         .thenReturn(List.of("docs/roadmap.md", "docs/specs/001-login.md"));
   }
 
@@ -139,7 +138,7 @@ class DocsDialogTest {
 
   @Test
   void should_show_short_document_on_one_page_escaped() {
-    when(api.readFile(connection, REPO.id(), "docs/roadmap.md"))
+    when(api.readFile(connection, REPO, "docs/roadmap.md"))
         .thenReturn(Optional.of("# Roadmap\n<b>PR E</b> & D"));
 
     Screen page = press(Actions.document("docs/roadmap.md", 0)).screen();
@@ -152,7 +151,7 @@ class DocsDialogTest {
   @Test
   void should_page_long_document_by_lines() {
     String line = "x".repeat(99) + "\n";
-    when(api.readFile(connection, REPO.id(), "CLAUDE.md")).thenReturn(Optional.of(line.repeat(80)));
+    when(api.readFile(connection, REPO, "CLAUDE.md")).thenReturn(Optional.of(line.repeat(80)));
 
     Screen first = press(Actions.document("CLAUDE.md", 0)).screen();
     Screen last = press(Actions.document("CLAUDE.md", 9)).screen();
@@ -174,7 +173,7 @@ class DocsDialogTest {
 
   @Test
   void should_report_gitlab_failure_while_reading() {
-    when(api.readFile(any(), anyLong(), anyString()))
+    when(api.readFile(any(), any(), anyString()))
         .thenThrow(new IntegrationException(Reason.UNAVAILABLE, "GET raw failed", null));
 
     Screen screen = press(Actions.document("CLAUDE.md", 0)).screen();
@@ -184,7 +183,7 @@ class DocsDialogTest {
 
   @Test
   void should_report_failure_when_listing_fails_before_opening() {
-    when(api.files(any(), anyLong(), anyString(), anyBoolean()))
+    when(api.files(any(), any(), anyString(), anyBoolean()))
         .thenThrow(new IntegrationException(Reason.FORBIDDEN, "GET tree returned 403", null));
 
     assertThat(press(Actions.document("CLAUDE.md", 0)).screen().html())

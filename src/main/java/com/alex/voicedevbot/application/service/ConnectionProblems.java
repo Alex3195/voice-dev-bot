@@ -14,6 +14,7 @@ final class ConnectionProblems {
       case FORBIDDEN -> ConnectionProblem.FORBIDDEN;
       case NOT_FOUND -> ConnectionProblem.NOT_FOUND;
       case CONFLICT -> ConnectionProblem.REPO_EXISTS;
+      case MISSING_SCOPE -> ConnectionProblem.MISSING_SCOPE;
       case UNAVAILABLE -> ConnectionProblem.UNREACHABLE;
     };
   }

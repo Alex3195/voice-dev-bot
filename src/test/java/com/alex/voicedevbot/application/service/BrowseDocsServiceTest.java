@@ -69,9 +69,9 @@ class BrowseDocsServiceTest {
 
   @Test
   void should_list_markdown_documents_in_standard_order() {
-    when(api.files(connection, REPO.id(), "", false))
+    when(api.files(connection, REPO, "", false))
         .thenReturn(List.of("build.gradle.kts", "README.md", "CLAUDE.md"));
-    when(api.files(connection, REPO.id(), "docs", true))
+    when(api.files(connection, REPO, "docs", true))
         .thenReturn(
             List.of(
                 "docs/specs/001-login.md",
@@ -100,8 +100,7 @@ class BrowseDocsServiceTest {
 
   @Test
   void should_open_document_content() {
-    when(api.readFile(connection, REPO.id(), "docs/roadmap.md"))
-        .thenReturn(Optional.of("# Roadmap"));
+    when(api.readFile(connection, REPO, "docs/roadmap.md")).thenReturn(Optional.of("# Roadmap"));
 
     assertThat(service.open(USER, "docs/roadmap.md"))
         .isEqualTo(new DocsResult.Opened(ELT_IMZO, "docs/roadmap.md", "# Roadmap"));
@@ -109,7 +108,7 @@ class BrowseDocsServiceTest {
 
   @Test
   void should_report_missing_document() {
-    when(api.readFile(connection, REPO.id(), "docs/old.md")).thenReturn(Optional.empty());
+    when(api.readFile(connection, REPO, "docs/old.md")).thenReturn(Optional.empty());
 
     assertThat(service.open(USER, "docs/old.md"))
         .isEqualTo(new RepoUnavailable.Failed(ConnectionProblem.NOT_FOUND));

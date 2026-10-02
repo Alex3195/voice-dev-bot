@@ -42,12 +42,11 @@ public interface CodeHost {
    * @param directory repo ildizidan; {@code ""} — ildiz
    * @param recursive ichki papkalar ham
    */
-  List<String> files(
-      ProviderConnection connection, long repoId, String directory, boolean recursive);
+  List<String> files(ProviderConnection connection, Repo repo, String directory, boolean recursive);
 
   /** Standart branch'dagi fayl matni; fayl yo'q bo'lsa — bo'sh. */
-  Optional<String> readFile(ProviderConnection connection, long repoId, String path);
+  Optional<String> readFile(ProviderConnection connection, Repo repo, String path);
 
   /** Task (issue) raqamiga havola qilgan yoki uni yopadigan MR/PR'lar. */
-  List<MergeRequest> mergeRequests(ProviderConnection connection, long repoId, long iid);
+  List<MergeRequest> mergeRequests(ProviderConnection connection, Repo repo, long iid);
 }
