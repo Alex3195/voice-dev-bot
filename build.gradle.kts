@@ -82,6 +82,15 @@ tasks.check {
 	dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
+// Arxivdagi tasdiqlangan audiolarda STT dvigatellarini solishtirish (WER); Telegram bot ko'tarilmaydi
+tasks.register<JavaExec>("sttBenchmark") {
+	group = "verification"
+	description = "Compares STT engines on archived audio against confirmed transcripts"
+	classpath = sourceSets["main"].runtimeClasspath
+	mainClass = "com.alex.voicedevbot.config.SttBenchmarkApplication"
+	workingDir = projectDir
+}
+
 spotless {
 	java {
 		googleJavaFormat()

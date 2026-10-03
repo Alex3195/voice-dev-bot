@@ -30,7 +30,8 @@ xotirasi.
 **Keyingi tartib: I → J → D2 → D3.** D1 sinovida zaif bo'g'in Whisper chiqdi (qoraqalpoqcha talaffuzli nutqda
 ~50–60%), Claude esa shu matndan ma'noni ~80% tiklaydi. Shuning uchun avval STT sifati: **PR I** — Claude tuzatgan
 transkriptni saqlash (J va fine-tuning uchun "to'g'ri matn"), **PR J** — arxivdagi audiolarda STT dvigatellarini
-o'lchab solishtirish. PR I tayyor (#17), keyingisi — PR J.
+o'lchab solishtirish. PR I tayyor (#17). PR J: o'lchash vositasi tayyor (#19), solishtirish va inson tekshirgan
+matnlar — davomi (J2).
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -166,13 +167,33 @@ o'lchash (PR J) va Whisper fine-tuning uchun "to'g'ri javob" bo'ladi. Kichik PR,
 - [x] Testlar: WireMock (sxemada maydon, javobdan o'qish), service (jurnalga yozish, xato yo'li), JDBC
       (`corrected_text`, `confirmed_text`), dialog (tugma, tasdiqda ko'chirish).
 
-## PR J — STT dvigatellarini o'lchash (keyingi)
+## PR J — STT dvigatellarini o'lchash (vosita tayyor, #19; davomi — J2)
 
-- [ ] Arxivdagi audio + `confirmed_text` (PR I) bo'yicha WER (so'z xatosi foizi) hisoblovchi skript/test-harness.
+- [x] Arxivdagi audio + `confirmed_text` (PR I) bo'yicha WER (so'z xatosi foizi) hisoblovchi skript/test-harness:
+      `./gradlew sttBenchmark` → `build/reports/stt-benchmark/<vaqt>.md` (WER, xato turlari, tezlik, har audio,
+      eng ko'p xatolar, matnlar). Telegram bot ko'tarilmaydi; serverlar `stt.benchmark.engines` (README).
 - [ ] Solishtirish: hozirgi whisper.cpp `large-v3-q5_0` (`uz`), to'liq `large-v3`, va o'zbek tilini qo'llaydigan
       bir-ikkita tijoriy STT (har biri `SpeechToText` porti orqali adapter). Tijoriy xizmatlar — kalit va xarajat
       uchun ruxsat bilan.
 - [ ] Natija bo'yicha qaror: dvigatelni almashtirish yoki fine-tuning'ga o'tish ("Keyin" bo'limi).
+
+**Birinchi o'lchov (2026-10-03, 12 audio, 13,7 daqiqa, 1337 so'z, bitta ovoz):** jurnal (bot o'sha paytda bergan
+matn) 36,6%, hozirgi `large-v3-q5_0` hozirgi lug'at bilan qayta — 66,0%. Topilmalar:
+- `confirmed_text` jurnal matniga juda yaqin: Claude tiklay olmagan joylarni Whisper yozganicha qoldiradi (#15 da
+  deyarli o'zgarmagan) — jurnal ustuni yutadi, haqiqiy WER yuqoriroq. Dvigatellarni o'zaro solishtirish adolatli
+  (bir xil lug'at va bir xil javob), lekin mutlaq raqam uchun **inson tekshirgan matn** kerak.
+- Prompt'dagi lug'at natijani keskin o'zgartiradi: "utility bills"ga keyin qo'shilgan 3 atama bilan Whisper
+  takrorlanib qoldi (hallucination loop). Lug'atsiz projectlarda qayta o'tkazish jurnal bilan bir xil
+  (whisper.cpp deterministik).
+
+### J2 — davomi (keyingi)
+
+- [ ] To'liq `large-v3` bilan solishtirish (model `~/.local/share/whisper-models/ggml-large-v3.bin`, ikkinchi
+      server `WHISPER_MODEL=ggml-large-v3.bin WHISPER_PORT=8179 scripts/whisper-dev.sh`), natija — #19 izohida.
+- [ ] Botda `✏️ Tuzatilgan matnni tahrirlash` — foydalanuvchi `confirmed_text`ni qo'lda to'g'rilaydi; 10 ta
+      atrofida inson tekshirgan "oltin" yozuv. Yana 8–12 audio, imkon bo'lsa boshqa ovoz (2000+ so'z).
+- [ ] Lug'at prompt'ga qanday ta'sir qilishini o'lchash (lug'atli / lug'atsiz) — takrorlanib qolish sababi.
+- [ ] Tijoriy STT (kalit va xarajat — ruxsat bilan), keyin qaror.
 
 ### D2 — Spetsifikatsiya
 

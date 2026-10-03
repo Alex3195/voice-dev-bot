@@ -41,6 +41,28 @@ class DiskAudioArchiveTest {
     assertThat(archive.store(VOICE, now)).isNotEqualTo(archive.store(VOICE, now));
   }
 
+  @Test
+  void should_load_stored_audio_back() {
+    DiskAudioArchive archive = new DiskAudioArchive(root, TASHKENT);
+    String path = archive.store(VOICE, Instant.parse("2026-10-02T09:00:00Z"));
+
+    assertThat(archive.load(path, "audio/ogg")).isEqualTo(VOICE);
+  }
+
+  @Test
+  void should_fail_to_load_missing_empty_or_outside_file() throws IOException {
+    DiskAudioArchive archive = new DiskAudioArchive(root, TASHKENT);
+    Files.createFile(root.resolve("empty.ogg"));
+
+    assertThatThrownBy(() -> archive.load("2026-10-02/none.ogg", "audio/ogg"))
+        .isInstanceOf(StorageException.class);
+    assertThatThrownBy(() -> archive.load("empty.ogg", "audio/ogg"))
+        .isInstanceOf(StorageException.class);
+    assertThatThrownBy(() -> archive.load("../secret.ogg", "audio/ogg"))
+        .isInstanceOf(StorageException.class)
+        .hasMessageContaining("escapes");
+  }
+
   @ParameterizedTest
   @CsvSource({
     "audio/ogg, ogg",

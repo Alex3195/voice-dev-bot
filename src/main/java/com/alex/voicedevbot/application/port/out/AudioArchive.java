@@ -12,4 +12,11 @@ public interface AudioArchive {
    * @throws StorageException saqlab bo'lmasa
    */
   String store(AudioClip audio, Instant receivedAt);
+
+  /**
+   * @param path {@link #store} qaytargan yo'l
+   * @param mimeType audio turi (arxivda alohida saqlanmaydi — jurnaldan)
+   * @throws StorageException fayl yo'q yoki o'qib bo'lmasa
+   */
+  AudioClip load(String path, String mimeType);
 }

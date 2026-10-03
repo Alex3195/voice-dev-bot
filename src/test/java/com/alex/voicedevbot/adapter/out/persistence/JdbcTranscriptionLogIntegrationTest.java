@@ -2,6 +2,7 @@ package com.alex.voicedevbot.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.alex.voicedevbot.application.port.out.StorageException;
 import com.alex.voicedevbot.domain.AudioKind;
@@ -176,6 +177,23 @@ class JdbcTranscriptionLogIntegrationTest {
               assertThat(entry.confirmedText()).contains("Matn.");
               assertThat(entry.correctionConfirmed()).isFalse();
             });
+  }
+
+  @Test
+  void should_list_only_confirmed_transcripts_oldest_first() {
+    LlmUsage usage = new LlmUsage(new ModelId("claude-opus-5-5"), 1, 0, 0, 1);
+    long newer = log.append(record(null, "ikkinchi", AT.plusSeconds(60)));
+    long older = log.append(record(null, "birinchi", AT));
+    long unconfirmed = log.append(record(null, "uchinchi", AT));
+    for (long id : List.of(newer, older, unconfirmed)) {
+      log.recordCorrection(id, Optional.of("Matn " + id), usage);
+    }
+    log.confirmCorrection(newer);
+    log.confirmCorrection(older);
+
+    assertThat(log.confirmed())
+        .extracting(LoggedTranscript::id, entry -> entry.confirmedText().orElseThrow())
+        .containsExactly(tuple(older, "Matn " + older), tuple(newer, "Matn " + newer));
   }
 
   @Test
