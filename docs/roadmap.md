@@ -30,7 +30,7 @@ xotirasi.
 **Keyingi tartib: I → J → D2 → D3.** D1 sinovida zaif bo'g'in Whisper chiqdi (qoraqalpoqcha talaffuzli nutqda
 ~50–60%), Claude esa shu matndan ma'noni ~80% tiklaydi. Shuning uchun avval STT sifati: **PR I** — Claude tuzatgan
 transkriptni saqlash (J va fine-tuning uchun "to'g'ri matn"), **PR J** — arxivdagi audiolarda STT dvigatellarini
-o'lchab solishtirish.
+o'lchab solishtirish. PR I tayyor (#17), keyingisi — PR J.
 
 ## Asosiy qarorlar (nima uchun shunday)
 
@@ -146,26 +146,27 @@ o'lchab solishtirish.
 - [x] Claude ishlayotganda bosilgan tugma "⏳ Claude qoralama tuzmoqda…" ga almashadi va bosilmaydi; qayta bosish
       ikkinchi so'rov yubormaydi (shu transkriptdan tuzilgan qoralama qayta ko'rsatiladi). Kredit tugasa — "💳".
 
-## PR I — Claude tuzatgan transkript (keyingi)
+## PR I — Claude tuzatgan transkript (tayyor, #17)
 
 Maqsad: Whisper xatolari tuzatilgan to'liq matnni olish va saqlash. U foydalanuvchiga ko'rinadi, bazada STT'ni
 o'lchash (PR J) va Whisper fine-tuning uchun "to'g'ri javob" bo'ladi. Kichik PR, D1 ustiga quriladi.
 
-- [ ] Claude javob sxemasiga `corrected_transcript` qo'shiladi (`ClaudeTaskParser`). **Bu tarjima ham, qayta
+- [x] Claude javob sxemasiga `corrected_transcript` qo'shiladi (`ClaudeTaskParser`). **Bu tarjima ham, qayta
       yozish ham emas:** so'zlovchi aytgan so'zlar o'sha tartibda, faqat tanib olish xatolari tuzatiladi, lotin
       yozuvida; qoraqalpoqcha talaffuzdagi so'zlar ham aytilganidek qoladi (fine-tuning'ga aynan aytilgani kerak).
       Ko'rsatmaga shu aniq yoziladi. Narxi: output transkript uzunligicha ko'payadi (~+0.5–1 sent/task).
-- [ ] `TaskDraft` (yoki `ParsedTask`) ga tuzatilgan matn; jurnal: `transcription.corrected_text` (V2'da bor, hozir
+- [x] `TaskDraft` (yoki `ParsedTask`) ga tuzatilgan matn; jurnal: `transcription.corrected_text` (V2'da bor, hozir
       bo'sh) — `TranscriptionLog.recordLlmUsage` o'rniga bitta chaqiruv: matn + `usage` birga yoziladi.
-- [ ] Telegram: tasdiq ekranida `📝 Tuzatilgan matn` tugmasi (uzun — alohida yangi xabar bo'lib chiqadi); transkript
-      kartochkasida (📝 Transkriptlar → yozuv) tuzatilgan matn ham ko'rinadi, bo'lsa.
-- [ ] `confirmed_text` (V2'da bor): foydalanuvchi task'ni `✅ Yaratish` bilan tasdiqlasa, tuzatilgan matn
+- [x] Telegram: tasdiq ekranida `📝 Tuzatilgan matn` tugmasi (uzun — alohida yangi xabar bo'lib chiqadi); transkript
+      kartochkasida (📝 Transkriptlar → yozuv) ham shu tugma (matnning o'zi emas — xom va tuzatilgan matn birga
+      4096 belgidan oshishi mumkin), tasdiqlangan bo'lsa ✅ bilan.
+- [x] `confirmed_text` (V2'da bor): foydalanuvchi task'ni `✅ Yaratish` bilan tasdiqlasa, tuzatilgan matn
       "tasdiqlangan" deb ko'chiriladi — fine-tuning uchun eng ishonchli yozuvlar shular. Matnni qo'lda tahrirlash
       — keyin (kerak bo'lsa).
-- [ ] Testlar: WireMock (sxemada maydon, javobdan o'qish), service (jurnalga yozish, xato yo'li), JDBC
+- [x] Testlar: WireMock (sxemada maydon, javobdan o'qish), service (jurnalga yozish, xato yo'li), JDBC
       (`corrected_text`, `confirmed_text`), dialog (tugma, tasdiqda ko'chirish).
 
-## PR J — STT dvigatellarini o'lchash
+## PR J — STT dvigatellarini o'lchash (keyingi)
 
 - [ ] Arxivdagi audio + `confirmed_text` (PR I) bo'yicha WER (so'z xatosi foizi) hisoblovchi skript/test-harness.
 - [ ] Solishtirish: hozirgi whisper.cpp `large-v3-q5_0` (`uz`), to'liq `large-v3`, va o'zbek tilini qo'llaydigan
