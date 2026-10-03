@@ -17,6 +17,8 @@ public class InMemoryTranscriptionLog implements TranscriptionLog {
 
   private final List<LoggedTranscript> entries = new ArrayList<>();
   private final Map<Long, LlmUsage> usage = new HashMap<>();
+  private final Map<Long, String> corrected = new HashMap<>();
+  private final Map<Long, String> confirmed = new HashMap<>();
 
   @Override
   public long append(TranscriptRecord record) {
@@ -35,17 +37,24 @@ public class InMemoryTranscriptionLog implements TranscriptionLog {
                 .reversed())
         .skip(offset)
         .limit(limit)
+        .map(this::withTexts)
         .toList();
   }
 
   @Override
   public Optional<LoggedTranscript> find(long id) {
-    return entries.stream().filter(entry -> entry.id() == id).findFirst();
+    return entries.stream().filter(entry -> entry.id() == id).findFirst().map(this::withTexts);
   }
 
   @Override
-  public void recordLlmUsage(long id, LlmUsage llmUsage) {
+  public void recordCorrection(long id, Optional<String> correctedText, LlmUsage llmUsage) {
     usage.put(id, llmUsage);
+    correctedText.ifPresentOrElse(text -> corrected.put(id, text), () -> corrected.remove(id));
+  }
+
+  @Override
+  public void confirmCorrection(long id) {
+    Optional.ofNullable(corrected.get(id)).ifPresent(text -> confirmed.put(id, text));
   }
 
   public Optional<LlmUsage> usageOf(long id) {
@@ -54,6 +63,14 @@ public class InMemoryTranscriptionLog implements TranscriptionLog {
 
   public List<TranscriptRecord> records() {
     return entries.stream().map(LoggedTranscript::record).toList();
+  }
+
+  private LoggedTranscript withTexts(LoggedTranscript entry) {
+    return new LoggedTranscript(
+        entry.id(),
+        entry.record(),
+        Optional.ofNullable(corrected.get(entry.id())),
+        Optional.ofNullable(confirmed.get(entry.id())));
   }
 
   private static boolean matches(TranscriptFilter filter, TranscriptRecord record) {

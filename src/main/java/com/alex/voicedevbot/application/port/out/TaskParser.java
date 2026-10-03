@@ -56,12 +56,18 @@ public interface TaskParser {
 
   /**
    * @param project Claude aniqlagan project nomi; aniq bo'lmasa — bo'sh
+   * @param correctedTranscript transkript, faqat tanib olish xatolari tuzatilgan (tarjima emas)
    */
-  record ParsedTask(TaskDraft draft, Optional<String> project, LlmUsage usage) {
+  record ParsedTask(
+      TaskDraft draft,
+      Optional<String> project,
+      Optional<String> correctedTranscript,
+      LlmUsage usage) {
 
     public ParsedTask {
       Objects.requireNonNull(draft, "draft");
       Objects.requireNonNull(project, "project");
+      Objects.requireNonNull(correctedTranscript, "correctedTranscript");
       Objects.requireNonNull(usage, "usage");
     }
   }

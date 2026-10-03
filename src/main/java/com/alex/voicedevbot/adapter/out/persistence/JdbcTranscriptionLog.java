@@ -41,13 +41,19 @@ public class JdbcTranscriptionLog implements TranscriptionLog {
       from transcription t
       left join project p on p.id = t.project_id
       """;
-  private static final String UPDATE_USAGE =
+  private static final String UPDATE_CORRECTION =
       """
       update transcription
-      set llm_usage = jsonb_build_object('model', ?::text, 'input_tokens', ?::bigint,
+      set corrected_text = ?,
+          llm_usage = jsonb_build_object('model', ?::text, 'input_tokens', ?::bigint,
           'cache_read_input_tokens', ?::bigint, 'cache_creation_input_tokens', ?::bigint,
           'output_tokens', ?::bigint)
       where id = ?
+      """;
+  private static final String CONFIRM_CORRECTION =
+      """
+      update transcription set confirmed_text = corrected_text
+      where id = ? and corrected_text is not null
       """;
   private static final String NEWEST_FIRST = " order by t.created_at desc, t.id desc";
 
@@ -73,17 +79,30 @@ public class JdbcTranscriptionLog implements TranscriptionLog {
   }
 
   @Override
-  public void recordLlmUsage(long id, LlmUsage usage) {
+  public void recordCorrection(long id, Optional<String> correctedText, LlmUsage usage) {
     jdbc.query(
-        "record llm usage",
+        "record correction",
         connection -> {
-          try (PreparedStatement update = connection.prepareStatement(UPDATE_USAGE)) {
-            update.setString(1, usage.model().value());
-            update.setLong(2, usage.inputTokens());
-            update.setLong(3, usage.cacheReadTokens());
-            update.setLong(4, usage.cacheWriteTokens());
-            update.setLong(5, usage.outputTokens());
-            update.setLong(6, id);
+          try (PreparedStatement update = connection.prepareStatement(UPDATE_CORRECTION)) {
+            update.setString(1, correctedText.orElse(null));
+            update.setString(2, usage.model().value());
+            update.setLong(3, usage.inputTokens());
+            update.setLong(4, usage.cacheReadTokens());
+            update.setLong(5, usage.cacheWriteTokens());
+            update.setLong(6, usage.outputTokens());
+            update.setLong(7, id);
+            return update.executeUpdate();
+          }
+        });
+  }
+
+  @Override
+  public void confirmCorrection(long id) {
+    jdbc.query(
+        "confirm correction",
+        connection -> {
+          try (PreparedStatement update = connection.prepareStatement(CONFIRM_CORRECTION)) {
+            update.setLong(1, id);
             return update.executeUpdate();
           }
         });
@@ -149,7 +168,12 @@ public class JdbcTranscriptionLog implements TranscriptionLog {
     List<LoggedTranscript> transcripts = new ArrayList<>();
     try (ResultSet rows = select.executeQuery()) {
       while (rows.next()) {
-        transcripts.add(new LoggedTranscript(rows.getLong("id"), recordOf(rows)));
+        transcripts.add(
+            new LoggedTranscript(
+                rows.getLong("id"),
+                recordOf(rows),
+                Optional.ofNullable(rows.getString("corrected_text")),
+                Optional.ofNullable(rows.getString("confirmed_text"))));
       }
     }
     return transcripts;

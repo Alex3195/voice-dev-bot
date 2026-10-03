@@ -15,17 +15,20 @@ public sealed interface TaskDraftResult {
    *     emas
    * @param suggestedTerms faol project lug'atiga qo'shish taklifi (Whisper adashgan, lug'atda yo'q
    *     atamalar)
+   * @param correctedTranscript Claude tuzatgan transkript (jurnalga ham yozilgan)
    */
   record Drafted(
       TaskDraft draft,
       Optional<ProjectName> otherProject,
       List<String> suggestedTerms,
+      Optional<String> correctedTranscript,
       LlmUsage usage)
       implements TaskDraftResult {
 
     public Drafted {
       Objects.requireNonNull(draft, "draft");
       Objects.requireNonNull(otherProject, "otherProject");
+      Objects.requireNonNull(correctedTranscript, "correctedTranscript");
       Objects.requireNonNull(usage, "usage");
       suggestedTerms = List.copyOf(suggestedTerms);
     }

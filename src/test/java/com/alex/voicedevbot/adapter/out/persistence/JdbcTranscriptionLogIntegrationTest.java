@@ -26,6 +26,7 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
@@ -119,12 +120,14 @@ class JdbcTranscriptionLogIntegrationTest {
   }
 
   @Test
-  void should_record_llm_usage_as_json_and_overwrite_it() throws Exception {
+  void should_record_correction_with_llm_usage_as_json_and_overwrite_it() throws Exception {
     long id = log.append(record(null, "matn", AT));
     ModelId opus = new ModelId("claude-opus-5-5");
 
-    log.recordLlmUsage(id, new LlmUsage(opus, 1, 2, 3, 4));
-    log.recordLlmUsage(id, new LlmUsage(opus, 120, 900, 40, 210));
+    log.recordCorrection(id, Optional.of("eski"), new LlmUsage(opus, 1, 2, 3, 4));
+    log.recordCorrection(id, Optional.of("Matn."), new LlmUsage(opus, 120, 900, 40, 210));
+
+    assertThat(log.find(id).orElseThrow().correctedText()).contains("Matn.");
 
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement();
@@ -147,6 +150,32 @@ class JdbcTranscriptionLogIntegrationTest {
                   row.getInt("output")))
           .containsExactly(120, 900, 40, 210);
     }
+  }
+
+  @Test
+  void should_copy_corrected_text_to_confirmed_text_and_keep_it_on_new_correction() {
+    long id = log.append(record(null, "matn", AT));
+    LlmUsage usage = new LlmUsage(new ModelId("claude-opus-5-5"), 1, 0, 0, 1);
+
+    log.confirmCorrection(id);
+    LoggedTranscript uncorrected = log.find(id).orElseThrow();
+    log.recordCorrection(id, Optional.of("Matn."), usage);
+    log.confirmCorrection(id);
+    LoggedTranscript confirmed = log.find(id).orElseThrow();
+    log.recordCorrection(id, Optional.empty(), usage);
+    log.confirmCorrection(id);
+
+    assertThat(uncorrected.confirmedText()).isEmpty();
+    assertThat(confirmed.confirmedText()).contains("Matn.");
+    assertThat(confirmed.correctionConfirmed()).isTrue();
+    assertThat(log.list(new TranscriptFilter.WithoutProject(), 0, 1))
+        .singleElement()
+        .satisfies(
+            entry -> {
+              assertThat(entry.correctedText()).isEmpty();
+              assertThat(entry.confirmedText()).contains("Matn.");
+              assertThat(entry.correctionConfirmed()).isFalse();
+            });
   }
 
   @Test

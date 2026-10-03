@@ -35,6 +35,7 @@ final class Actions {
   static final String SETTINGS = "settings";
   static final String TRANSCRIPTS = "tr:";
   static final String OPEN_TRANSCRIPT = "tro:";
+  static final String CORRECTED_TRANSCRIPT = "trc:";
 
   static final String CONNECTIONS = "cn";
   static final String CONNECTION_PREFIX = "cn:";
@@ -105,6 +106,11 @@ final class Actions {
 
   static String openTranscript(long id) {
     return NEW_MESSAGE + OPEN_TRANSCRIPT + id;
+  }
+
+  /** Claude tuzatgan matn — alohida xabar (uzun bo'lishi mumkin), joriy ekran o'chmaydi. */
+  static String correctedTranscript(long id) {
+    return NEW_MESSAGE + CORRECTED_TRANSCRIPT + id;
   }
 
   /** Xizmatning standart serveriga ({@code gitlab.com}, {@code github.com}) ulanish. */

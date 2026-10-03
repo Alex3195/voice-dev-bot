@@ -153,6 +153,9 @@ public class BotConversation {
     if (action.startsWith(Actions.OPEN_TRANSCRIPT)) {
       return openTranscript(user, action.substring(Actions.OPEN_TRANSCRIPT.length()));
     }
+    if (action.startsWith(Actions.CORRECTED_TRANSCRIPT)) {
+      return correctedTranscript(user, action.substring(Actions.CORRECTED_TRANSCRIPT.length()));
+    }
     return screenFor(user, action).map(screen -> new Reply(screen, asNewMessage, ""));
   }
 
@@ -345,6 +348,16 @@ public class BotConversation {
       case TranscriptsResult.Page ignored -> Optional.empty();
       case TranscriptsResult.AccessDenied() -> Optional.empty();
     };
+  }
+
+  private Optional<Reply> correctedTranscript(TelegramUserId user, String id) {
+    if (!TRANSCRIPT_ID.matcher(id).matches()
+        || !(transcripts.open(user, Long.parseLong(id))
+            instanceof TranscriptsResult.Opened opened)) {
+      return Optional.empty();
+    }
+    return BotScreens.correctedTranscript(opened.transcript())
+        .map(screen -> new Reply(screen, true, ""));
   }
 
   private Optional<Screen> askTerms(TelegramUserId user) {
