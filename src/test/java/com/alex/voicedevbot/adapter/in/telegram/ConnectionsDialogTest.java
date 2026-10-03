@@ -13,8 +13,6 @@ import static org.mockito.Mockito.when;
 import com.alex.voicedevbot.adapter.in.telegram.BotConversation.Reply;
 import com.alex.voicedevbot.adapter.in.telegram.Screen.Button;
 import com.alex.voicedevbot.adapter.out.claude.UnconfiguredClaude;
-import com.alex.voicedevbot.application.port.in.LanguageModelProblem;
-import com.alex.voicedevbot.application.port.in.TaskDraftResult;
 import com.alex.voicedevbot.application.port.out.IntegrationException;
 import com.alex.voicedevbot.application.port.out.IntegrationException.Reason;
 import com.alex.voicedevbot.application.service.BrowseDocsService;
@@ -43,6 +41,7 @@ import com.alex.voicedevbot.support.InMemoryProjectRepoLinks;
 import com.alex.voicedevbot.support.InMemoryProjectRepository;
 import com.alex.voicedevbot.support.InMemoryTranscriptionLog;
 import com.alex.voicedevbot.support.InMemoryUserSettingsRepository;
+import com.alex.voicedevbot.support.NotConfiguredDrafter;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -100,7 +99,7 @@ class ConnectionsDialogTest {
             new ManageTasksService(repoAccess),
             repos,
             transcripts,
-            (user, journalId) -> new TaskDraftResult.Failed(LanguageModelProblem.NOT_CONFIGURED),
+            new NotConfiguredDrafter(),
             new ManageGlossaryService(access, projects, settings)),
         new DocsDialog(new BrowseDocsService(repoAccess)),
         new ModelDialog(

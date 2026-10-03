@@ -43,7 +43,8 @@ class ClaudeTaskParserIntegrationTest {
   private static final ProjectName ELT_IMZO = new ProjectName("ELT imzo");
   private static final String TASK_JSON =
       """
-      {"project": "ELT imzo", "title": "Sertifikat muddatini ko'rsatish",
+      {"corrected_transcript": " ELT imzo sahifasida muddat chiqsin ",
+       "project": "ELT imzo", "title": "Sertifikat muddatini ko'rsatish",
        "description": "Imzolash sahifasida muddat ko'rinsin.",
        "acceptance_criteria": ["Muddat sanasi ko'rinadi", " "],
        "type": "feature",
@@ -98,6 +99,7 @@ class ClaudeTaskParserIntegrationTest {
 
     // then
     assertThat(parsed.project()).contains("ELT imzo");
+    assertThat(parsed.correctedTranscript()).contains("ELT imzo sahifasida muddat chiqsin");
     assertThat(parsed.draft().title()).isEqualTo("Sertifikat muddatini ko'rsatish");
     assertThat(parsed.draft().acceptanceCriteria()).containsExactly("Muddat sanasi ko'rinadi");
     assertThat(parsed.draft().type()).isEqualTo(TaskType.FEATURE);
@@ -126,8 +128,30 @@ class ClaudeTaskParserIntegrationTest {
                 matchingJsonPath("$.output_config.format.type", equalTo("json_schema")))
             .withRequestBody(
                 matchingJsonPath(
-                    "$.output_config.format.schema.required[6]", equalTo("task_summary")))
+                    "$.output_config.format.schema.required[0]", equalTo("corrected_transcript")))
+            .withRequestBody(
+                matchingJsonPath(
+                    "$.output_config.format.schema.required[7]", equalTo("task_summary")))
+            .withRequestBody(containing("\"properties\":{\"corrected_transcript\""))
             .withRequestBody(matchingJsonPath("$.fallbacks", equalTo("default"))));
+  }
+
+  @Test
+  void should_leave_corrected_transcript_and_project_empty_when_claude_returns_blanks() {
+    claude.stubFor(
+        post(urlPathEqualTo("/v1/messages"))
+            .willReturn(
+                okJson(
+                    message(
+                        TASK_JSON
+                            .replace(" ELT imzo sahifasida muddat chiqsin ", " ")
+                            .replace("\"project\": \"ELT imzo\"", "\"project\": \"\""),
+                        "end_turn"))));
+
+    ParsedTask parsed = parser.parse(request(OPUS));
+
+    assertThat(parsed.correctedTranscript()).isEmpty();
+    assertThat(parsed.project()).isEmpty();
   }
 
   @Test

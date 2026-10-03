@@ -70,6 +70,7 @@ class DraftTaskServiceTest {
   private static final ModelId DEFAULT = new ModelId("claude-opus-5-5");
   private static final ModelId SONNET = new ModelId("claude-sonnet-5-5");
   private static final LlmUsage USAGE = new LlmUsage(DEFAULT, 120, 900, 0, 210);
+  private static final String CORRECTED = "ELT imzo sahifasida muddat chiqsin";
   private static final String SPOKEN = "elt imza sahifasida muddat chiqsin";
 
   private final InMemoryProjectRepository projects = new InMemoryProjectRepository();
@@ -129,7 +130,8 @@ class DraftTaskServiceTest {
     projects.save(new Project(FINBANK, Glossary.of(List.of("Klaes"))));
     settingsRepository.save(
         UserSettings.defaults(USER, new SpeechLanguage("uz")).withActiveProject(ELT_IMZO));
-    answer = new ParsedTask(draft(List.of()), Optional.of("ELT imzo"), USAGE);
+    answer =
+        new ParsedTask(draft(List.of()), Optional.of("ELT imzo"), Optional.of(CORRECTED), USAGE);
   }
 
   @Test
@@ -147,7 +149,9 @@ class DraftTaskServiceTest {
 
     // then
     assertThat(result)
-        .isEqualTo(new TaskDraftResult.Drafted(answer.draft(), Optional.empty(), List.of(), USAGE));
+        .isEqualTo(
+            new TaskDraftResult.Drafted(
+                answer.draft(), Optional.empty(), List.of(), Optional.of(CORRECTED), USAGE));
     assertThat(sent.get())
         .isEqualTo(
             new TaskParser.Request(
@@ -159,6 +163,34 @@ class DraftTaskServiceTest {
                 Optional.of(ELT_IMZO),
                 List.of(new RuleFile("CLAUDE.md", "# Qoidalar"))));
     assertThat(log.usageOf(id)).contains(USAGE);
+    assertThat(log.find(id).orElseThrow().correctedText()).contains(CORRECTED);
+    assertThat(log.find(id).orElseThrow().confirmedText()).isEmpty();
+  }
+
+  @Test
+  void should_confirm_corrected_transcript_only_for_allowed_user() {
+    long id = logged(SPOKEN);
+    service.fromTranscript(USER, id);
+
+    service.confirmCorrection(STRANGER, id);
+    assertThat(log.find(id).orElseThrow().confirmedText()).isEmpty();
+
+    service.confirmCorrection(USER, id);
+    assertThat(log.find(id).orElseThrow().confirmedText()).contains(CORRECTED);
+    assertThat(log.find(id).orElseThrow().correctionConfirmed()).isTrue();
+  }
+
+  @Test
+  void should_not_fail_when_confirmation_cannot_be_recorded() {
+    InMemoryTranscriptionLog broken =
+        new InMemoryTranscriptionLog() {
+          @Override
+          public void confirmCorrection(long id) {
+            throw new StorageException("db down", null);
+          }
+        };
+
+    service(broken).confirmCorrection(USER, 1);
   }
 
   @Test
@@ -192,6 +224,7 @@ class DraftTaskServiceTest {
                     new TermCorrection("bi-ai", "BI"),
                     new TermCorrection("dash bord", "Dashboard"))),
             Optional.of(" finbank "),
+            Optional.empty(),
             USAGE);
 
     TaskDraftResult result = service.fromTranscript(USER, logged(SPOKEN));
@@ -210,21 +243,26 @@ class DraftTaskServiceTest {
     settingsRepository.save(UserSettings.defaults(USER, new SpeechLanguage("uz")));
     answer =
         new ParsedTask(
-            draft(List.of(new TermCorrection("akva", "Akfa"))), Optional.of("Nomalum"), USAGE);
+            draft(List.of(new TermCorrection("akva", "Akfa"))),
+            Optional.of("Nomalum"),
+            Optional.of(CORRECTED),
+            USAGE);
 
     TaskDraftResult result = service.fromTranscript(USER, logged(SPOKEN));
 
     assertThat(result)
-        .isEqualTo(new TaskDraftResult.Drafted(answer.draft(), Optional.empty(), List.of(), USAGE));
+        .isEqualTo(
+            new TaskDraftResult.Drafted(
+                answer.draft(), Optional.empty(), List.of(), Optional.of(CORRECTED), USAGE));
     assertThat(sent.get().activeProject()).isEmpty();
   }
 
   @Test
-  void should_return_draft_even_when_usage_cannot_be_recorded() {
+  void should_return_draft_even_when_correction_cannot_be_recorded() {
     InMemoryTranscriptionLog broken =
         new InMemoryTranscriptionLog() {
           @Override
-          public void recordLlmUsage(long id, LlmUsage usage) {
+          public void recordCorrection(long id, Optional<String> correctedText, LlmUsage usage) {
             throw new StorageException("db down", null);
           }
         };

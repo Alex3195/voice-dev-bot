@@ -163,12 +163,37 @@ final class BotScreens {
             + "</i>\n\n"
             + Html.escape(record.transcription().transcript().text());
     String key = record.project().map(ProjectName::key).orElse(null);
+    List<List<Button>> rows = new ArrayList<>();
+    if (entry.correctedText().isPresent()) {
+      rows.add(List.of(correctedTranscriptButton(entry.id(), entry.correctionConfirmed())));
+    }
+    rows.add(List.of(new Button("✅ Task yaratish", Actions.taskFromTranscript(entry.id()))));
+    rows.add(List.of(new Button("⬅️ Ro'yxatga", Actions.transcripts(key, 0))));
     return new Screen(
-        html,
-        List.of(
-            List.of(new Button("✅ Task yaratish", Actions.taskFromTranscript(entry.id()))),
-            List.of(new Button("⬅️ Ro'yxatga", Actions.transcripts(key, 0)))),
-        List.of(new Attachment(record.audio().kind(), record.audio().ref().id())));
+        html, rows, List.of(new Attachment(record.audio().kind(), record.audio().ref().id())));
+  }
+
+  /**
+   * @param confirmed shu matn bilan tuzilgan task tasdiqlangan
+   */
+  static Button correctedTranscriptButton(long journalId, boolean confirmed) {
+    return new Button(
+        "📝 Tuzatilgan matn" + (confirmed ? " ✅" : ""), Actions.correctedTranscript(journalId));
+  }
+
+  /** Claude tuzatgan matn; tuzatilmagan bo'lsa — bo'sh. */
+  static Optional<Screen> correctedTranscript(LoggedTranscript entry) {
+    return entry
+        .correctedText()
+        .map(
+            text ->
+                Screen.text(
+                    "📝 <b>Tuzatilgan matn · #"
+                        + entry.id()
+                        + "</b>"
+                        + (entry.correctionConfirmed() ? " ✅ tasdiqlangan" : "")
+                        + "\n<i>Claude faqat tanib olish xatolarini tuzatdi</i>\n\n"
+                        + Html.escape(text)));
   }
 
   static Screen projects(List<ProjectSummary> summaries) {

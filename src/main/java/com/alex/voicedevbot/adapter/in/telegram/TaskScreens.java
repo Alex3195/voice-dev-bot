@@ -217,6 +217,9 @@ final class TaskScreens {
         List.of(
             new Button("✏️ Sarlavha", Actions.TASK_EDIT_TITLE),
             new Button("✏️ Tavsif", Actions.TASK_EDIT_DESCRIPTION)));
+    claude
+        .flatMap(notes -> notes.correctedIn().stream().boxed().findFirst())
+        .ifPresent(id -> rows.add(List.of(BotScreens.correctedTranscriptButton(id, false))));
     List<String> terms = claude.map(ClaudeNotes::suggestedTerms).orElse(List.of());
     for (int i = 0; i < terms.size(); i++) {
       rows.add(List.of(new Button("💡 Lug'atga: " + terms.get(i), Actions.addTerm(i))));

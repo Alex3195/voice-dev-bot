@@ -5,6 +5,7 @@ import static com.alex.voicedevbot.support.GitLabFixtures.TOKEN;
 import static com.alex.voicedevbot.support.GitLabFixtures.VALID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -439,6 +440,7 @@ class TaskDialogTest {
             new TaskParser.ParsedTask(
                 claudeDraft,
                 Optional.of("Finbank"),
+                Optional.of("ELT imzo sahifasida muddat chiqsin"),
                 new LlmUsage(new ModelId("claude-opus-5-5"), 120, 900, 40, 210)))
         .when(parser)
         .parse(any());
@@ -449,10 +451,12 @@ class TaskDialogTest {
 
     // when
     Screen draft = press(Actions.taskFromTranscript(id)).screen();
+    Reply corrected = press(Actions.correctedTranscript(id));
     Screen added = press(Actions.addTerm(1)).screen();
     press(Actions.TASK_EDIT_TITLE);
     Screen edited = text("Muddatni ko'rsatish");
     press(Actions.TASK_CONFIRM);
+    Screen correctedAfterConfirm = press(Actions.correctedTranscript(id)).screen();
 
     // then
     assertThat(draft.html())
@@ -462,7 +466,13 @@ class TaskDialogTest {
         .contains("⚠️ Claude bu taskni <b>Finbank</b> projectiga tegishli deb hisobladi")
         .contains("✏️ Tuzatildi: <s>elt imza</s> → <b>ELT imzo</b>, <s>klayes</s> → <b>Klaes</b>")
         .contains("🧾 claude-opus-5-5 · 1060 in (keshdan 900) · 210 out");
-    assertThat(labels(draft)).contains("💡 Lug'atga: ELT imzo", "💡 Lug'atga: Klaes");
+    assertThat(labels(draft))
+        .contains("💡 Lug'atga: ELT imzo", "💡 Lug'atga: Klaes", "📝 Tuzatilgan matn");
+    assertThat(corrected.asNewMessage()).isTrue();
+    assertThat(corrected.screen().html())
+        .startsWith("📝 <b>Tuzatilgan matn · #" + id + "</b>\n")
+        .endsWith("ELT imzo sahifasida muddat chiqsin")
+        .doesNotContain("tasdiqlangan");
     assertThat(added.html()).startsWith("📖 Lug'atga qo'shildi: <b>Klaes</b>");
     assertThat(labels(added))
         .contains("💡 Lug'atga: ELT imzo")
@@ -470,6 +480,26 @@ class TaskDialogTest {
     assertThat(projects.find(ELT_IMZO).orElseThrow().glossary().terms()).containsExactly("Klaes");
     assertThat(edited.html()).contains("<b>Muddatni ko'rsatish</b>").contains("🤖 <i>Claude</i>");
     verify(api).createIssue(connection, REPO, expected, LABELS);
+    assertThat(transcriptLog.find(id).orElseThrow().confirmedText())
+        .contains("ELT imzo sahifasida muddat chiqsin");
+    assertThat(correctedAfterConfirm.html()).contains("✅ tasdiqlangan");
+  }
+
+  @Test
+  void should_not_confirm_transcript_when_task_came_from_plain_draft() {
+    long id = loggedTranscript("Login sahifasini tuzat");
+    transcriptLog.recordCorrection(
+        id,
+        Optional.of("Login sahifasini tuzat"),
+        new LlmUsage(new ModelId("claude-opus-5-5"), 1, 0, 0, 1));
+    when(api.createIssue(eq(connection), eq(REPO), any(), eq(LABELS)))
+        .thenReturn(task(6, "Login sahifasini tuzat", true, null, 0));
+
+    Screen draft = press(Actions.taskFromTranscript(id)).screen();
+    press(Actions.TASK_CONFIRM);
+
+    assertThat(labels(draft)).doesNotContain("📝 Tuzatilgan matn");
+    assertThat(transcriptLog.find(id).orElseThrow().confirmedText()).isEmpty();
   }
 
   @Test
@@ -489,6 +519,7 @@ class TaskDialogTest {
                       TaskType.FEATURE,
                       List.of(),
                       "Muddat."),
+                  Optional.empty(),
                   Optional.empty(),
                   new LlmUsage(new ModelId("claude-opus-5-5"), 1, 0, 0, 1));
             })

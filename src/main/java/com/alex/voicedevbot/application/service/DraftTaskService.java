@@ -26,7 +26,8 @@ import java.util.Optional;
 
 /**
  * Transkript, barcha projectlar lug'ati va faol project repo'sidagi qoidalar Claude'ga beriladi.
- * Chaqiruv narxi jurnalga yoziladi; yozib bo'lmasa qoralama baribir qaytadi.
+ * Tuzatilgan transkript va chaqiruv narxi jurnalga yoziladi; yozib bo'lmasa qoralama baribir
+ * qaytadi.
  */
 public class DraftTaskService implements DraftTaskUseCase {
 
@@ -89,7 +90,7 @@ public class DraftTaskService implements DraftTaskUseCase {
     } catch (LanguageModelException e) {
       return new TaskDraftResult.Failed(LanguageModelProblems.of(e));
     }
-    recordUsage(journalId, parsed);
+    recordCorrection(journalId, parsed);
     Optional<Project> active = current.activeProject().flatMap(name -> find(all, name.value()));
     return new TaskDraftResult.Drafted(
         parsed.draft(),
@@ -101,6 +102,7 @@ public class DraftTaskService implements DraftTaskUseCase {
         active
             .map(project -> suggestedTerms(project, parsed.draft().corrections()))
             .orElse(List.of()),
+        parsed.correctedTranscript(),
         parsed.usage());
   }
 
@@ -121,11 +123,23 @@ public class DraftTaskService implements DraftTaskUseCase {
         unavailable -> List.of());
   }
 
-  private void recordUsage(long journalId, ParsedTask parsed) {
+  @Override
+  public void confirmCorrection(TelegramUserId user, long journalId) {
+    if (!accessPolicy.isAllowed(user)) {
+      return;
+    }
     try {
-      log.recordLlmUsage(journalId, parsed.usage());
+      log.confirmCorrection(journalId);
     } catch (StorageException e) {
-      LOG.log(Level.WARNING, "Could not record Claude usage for transcript " + journalId, e);
+      LOG.log(Level.WARNING, "Could not confirm corrected transcript " + journalId, e);
+    }
+  }
+
+  private void recordCorrection(long journalId, ParsedTask parsed) {
+    try {
+      log.recordCorrection(journalId, parsed.correctedTranscript(), parsed.usage());
+    } catch (StorageException e) {
+      LOG.log(Level.WARNING, "Could not record Claude correction for transcript " + journalId, e);
     }
   }
 

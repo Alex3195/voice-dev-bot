@@ -20,6 +20,7 @@ import com.anthropic.models.beta.messages.BetaTextBlock;
 import com.anthropic.models.beta.messages.BetaTextBlockParam;
 import com.anthropic.models.beta.messages.MessageCreateParams;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -60,6 +61,11 @@ public class ClaudeTaskParser implements TaskParser {
       Keep technical terms, code identifiers and product names in their usual spelling.
 
       Fields:
+      - corrected_transcript: the transcript with only the recognition errors fixed. This is \
+      not a translation and not a rewrite: keep the speaker's own words in the order they were \
+      spoken, including filler words, repetitions and Karakalpak or dialect pronunciations of \
+      words that were recognised correctly. Change only what speech recognition got wrong, and \
+      write it in Latin script. If a fragment cannot be recovered, keep it as transcribed.
       - project: the project this task belongs to, spelled exactly as in <projects>. Prefer the \
       active project unless the speaker clearly names another one. Empty string if unclear.
       - title: one short imperative line, under 80 characters, saying what must be done.
@@ -195,13 +201,20 @@ public class ClaudeTaskParser implements TaskParser {
               TaskType.valueOf(root.path("type").asString("").toUpperCase(Locale.ROOT)),
               corrections,
               root.path("task_summary").asString(""));
-      String project = root.path("project").asString("").strip();
       return new ParsedTask(
-          draft, project.isEmpty() ? Optional.empty() : Optional.of(project), usage);
+          draft,
+          nonBlank(root.path("project").asString("")),
+          nonBlank(root.path("corrected_transcript").asString("")),
+          usage);
     } catch (JacksonException | IllegalArgumentException e) {
       throw new LanguageModelException(
           Reason.INVALID_RESPONSE, "Claude response does not match the task schema", e);
     }
+  }
+
+  private static Optional<String> nonBlank(String text) {
+    String stripped = text.strip();
+    return stripped.isEmpty() ? Optional.empty() : Optional.of(stripped);
   }
 
   private static LlmUsage usage(BetaMessage message) {
@@ -232,30 +245,25 @@ public class ClaudeTaskParser implements TaskParser {
             List.of("heard", "correct"),
             "additionalProperties",
             false);
-    Map<String, Object> properties =
-        Map.of(
-            "project", string,
-            "title", string,
-            "description", string,
-            "acceptance_criteria", Map.of("type", "array", "items", string),
-            "type",
-                Map.of("type", "string", "enum", List.of("feature", "bug", "improvement", "chore")),
-            "corrections", Map.of("type", "array", "items", correction),
-            "task_summary", string);
+    // Tartib muhim: Claude maydonlarni shu tartibda yozadi — avval matnni tuzatadi, keyin task
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("corrected_transcript", string);
+    properties.put("project", string);
+    properties.put("title", string);
+    properties.put("description", string);
+    properties.put("acceptance_criteria", Map.of("type", "array", "items", string));
+    properties.put(
+        "type",
+        Map.of("type", "string", "enum", List.of("feature", "bug", "improvement", "chore")));
+    properties.put("corrections", Map.of("type", "array", "items", correction));
+    properties.put("task_summary", string);
     return Map.of(
         "type",
         "object",
         "properties",
         properties,
         "required",
-        List.of(
-            "project",
-            "title",
-            "description",
-            "acceptance_criteria",
-            "type",
-            "corrections",
-            "task_summary"),
+        List.copyOf(properties.keySet()),
         "additionalProperties",
         false);
   }

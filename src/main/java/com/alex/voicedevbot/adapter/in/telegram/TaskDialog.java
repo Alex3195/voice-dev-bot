@@ -31,7 +31,8 @@ import java.util.regex.Pattern;
  * ochish, yangi task (qo'lda yoki transkriptdan). Tugmalari {@link Actions#TASKS} bilan boshlanadi.
  *
  * <p>Yangi task qoralamasi va kutilayotgan kiritish xotirada: bot qayta ishga tushsa yo'qoladi.
- * Tasdiqsiz ({@code ✅ Yaratish}) hech narsa yaratilmaydi.
+ * Tasdiqsiz ({@code ✅ Yaratish}) hech narsa yaratilmaydi. Claude qoralamasidan task yaratilsa,
+ * tuzatilgan transkript tasdiqlangan deb belgilanadi.
  */
 public class TaskDialog {
 
@@ -250,7 +251,7 @@ public class TaskDialog {
             new Draft(
                 task.title(),
                 Optional.of(task.description()),
-                Optional.of(ClaudeNotes.of(drafted)),
+                Optional.of(ClaudeNotes.of(drafted, journalId)),
                 OptionalLong.of(journalId)));
       }
       case TaskDraftResult.Failed(var problem)
@@ -365,6 +366,10 @@ public class TaskDialog {
     TasksResult result = tasks.create(user, draft.task());
     if (result instanceof TasksResult.Created) {
       drafts.remove(user, draft);
+      draft
+          .claude()
+          .flatMap(notes -> notes.correctedIn().stream().boxed().findFirst())
+          .ifPresent(journalId -> drafter.confirmCorrection(user, journalId));
     }
     return describe(result);
   }
