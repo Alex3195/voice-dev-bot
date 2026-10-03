@@ -47,6 +47,17 @@ public class InMemoryTranscriptionLog implements TranscriptionLog {
   }
 
   @Override
+  public List<LoggedTranscript> confirmed() {
+    return entries.stream()
+        .map(this::withTexts)
+        .filter(entry -> entry.confirmedText().isPresent())
+        .sorted(
+            Comparator.comparing((LoggedTranscript entry) -> entry.record().createdAt())
+                .thenComparingLong(LoggedTranscript::id))
+        .toList();
+  }
+
+  @Override
   public void recordCorrection(long id, Optional<String> correctedText, LlmUsage llmUsage) {
     usage.put(id, llmUsage);
     correctedText.ifPresentOrElse(text -> corrected.put(id, text), () -> corrected.remove(id));

@@ -72,6 +72,13 @@ Rasmiy image faqat amd64 — Apple Silicon'da emulyatsiya juda sekin, dev uchun 
 - to'liq `large-v3` (turbo emas) va `--beam-size 5` ishlatiladi;
 - bot har so'rov bilan lotin yozuvidagi namuna gapni prompt sifatida yuboradi (aks holda matn goh kirill, goh turkcha imloda chiqadi). Project atamalari lug'ati — keyingi bosqich (har project uchun bazada).
 
+**STT dvigatellarini o'lchash** (`./gradlew sttBenchmark`). Tasdiqlangan transkriptlarning audiosi arxivdan qayta o'tkaziladi va so'z xatosi foizi (WER) hisoblanadi; Telegram bot ko'tarilmaydi. Hisobot: `build/reports/stt-benchmark/<vaqt>.md` (transkript matnlari bor — repo'ga tushmaydi). Standart holatda faqat `STT_WHISPER_URL` serveri; boshqa model bilan solishtirish — har model o'z portida:
+
+```bash
+WHISPER_MODEL=ggml-large-v3.bin WHISPER_PORT=8179 scripts/whisper-dev.sh
+./gradlew sttBenchmark --args='--stt.benchmark.engines[0].url=http://127.0.0.1:8178 --stt.benchmark.engines[0].model=ggml-large-v3-q5_0 --stt.benchmark.engines[1].url=http://127.0.0.1:8179 --stt.benchmark.engines[1].model=ggml-large-v3'
+```
+
 ## Sozlamalar
 
 Spring `.env` faylni avtomatik o'qiydi (`spring.config.import`); serverda oddiy environment variable ham ishlaydi.

@@ -60,6 +60,19 @@ public class DiskAudioArchive implements AudioArchive {
     }
   }
 
+  @Override
+  public AudioClip load(String path, String mimeType) {
+    Path source = root.resolve(path).normalize();
+    if (!source.startsWith(root.normalize())) {
+      throw new StorageException("Archive path escapes the archive: " + path, null);
+    }
+    try {
+      return new AudioClip(Files.readAllBytes(source), mimeType);
+    } catch (IOException | IllegalArgumentException e) {
+      throw new StorageException("Failed to read archived audio " + path, e);
+    }
+  }
+
   static String extensionOf(AudioClip audio) {
     String mimeType = audio.mimeType().toLowerCase(Locale.ROOT);
     int parameters = mimeType.indexOf(';');

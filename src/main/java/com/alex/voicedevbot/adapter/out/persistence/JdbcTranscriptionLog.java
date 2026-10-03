@@ -143,6 +143,19 @@ public class JdbcTranscriptionLog implements TranscriptionLog {
         });
   }
 
+  @Override
+  public List<LoggedTranscript> confirmed() {
+    return jdbc.query(
+        "list confirmed transcripts",
+        connection -> {
+          try (PreparedStatement select =
+              connection.prepareStatement(
+                  SELECT + " where t.confirmed_text is not null order by t.created_at, t.id")) {
+            return read(select);
+          }
+        });
+  }
+
   private static void bind(PreparedStatement insert, TranscriptRecord record) throws SQLException {
     Transcription transcription = record.transcription();
     SourceAudio audio = record.audio();

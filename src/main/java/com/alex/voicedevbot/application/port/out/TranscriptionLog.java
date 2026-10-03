@@ -23,6 +23,9 @@ public interface TranscriptionLog {
 
   Optional<LoggedTranscript> find(long id);
 
+  /** Tasdiqlangan matni bor yozuvlar (STT'ni o'lchash uchun), eng eskisi birinchi. */
+  List<LoggedTranscript> confirmed();
+
   /**
    * Transkriptdan task tuzgan Claude chaqiruvi: tuzatilgan matn va narxi; har chaqiruvda ustiga
    * yoziladi.
