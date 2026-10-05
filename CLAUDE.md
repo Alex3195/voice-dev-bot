@@ -57,7 +57,8 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 
 ## Infratuzilma qarorlari
 - STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda lotin yozuvidagi namuna prompt (usiz matn kirill/turkcha imloga o'tib ketadi). Project atamalari lug'ati `.env`da emas — har project uchun bazada (`/glossary`), faol project lug'ati prompt'ga qo'shiladi. Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
-- Server: uy kompyuterida (Windows, RTX 3060 8 GB) Docker'da — `docker compose --profile gpu up -d` (`compose.yaml`, rasmiy `whisper.cpp:main-cuda` image). Model bir marta yuklanadi.
+- Server: uy kompyuterida (Windows, i5-10400F, RTX 3050 8 GB, Tailscale `desktop-ktues9q` / `100.65.210.19`) Docker Desktop'da, port 8178. Image o'zimiz yig'amiz (`docker/whisper-cuda/Dockerfile`: AVX2 + sm_86) — rasmiy `whisper.cpp:main-cuda` AVX-512 bilan yig'ilgan va bu CPU'da SIGILL (exit 132) bilan yiqiladi. Model `C:\whisper\models`da. 65 s audio ≈ 14 s (Mac'dan, Tailscale orqali).
+- Uy PC'ga Mac'dan SSH (kalit bilan, `alex@100.65.210.19`). SSH sessiyasida `docker pull`/`build` ishlamaydi (Windows Credential Manager) — image'ni PC'dagi sessiyada yuklash kerak; `docker run`/`logs` SSH'da ishlaydi.
 - Dev (Mac): native `whisper-server` (Metal GPU, Docker'dan ~70x tez) — `scripts/whisper-dev.sh`. Rasmiy image arm64 uchun yo'q.
 - Dev va server farqi faqat bitta sozlama: `STT_WHISPER_URL`.
 - Telegram: long polling (ochiq port/domen kerak emas).
