@@ -68,13 +68,11 @@ class WhisperCppSpeechToTextIntegrationTest {
     assertThat(transcription)
         .isEqualTo(
             new Transcription(
-                new Transcript("Yangi task yarating."),
-                "Lotin yozuvida. ELT imzo, kassa bo'limi.",
-                "whisper.cpp " + MODEL));
+                new Transcript("Yangi task yarating."), "Lotin yozuvida.", "whisper.cpp " + MODEL));
   }
 
   @Test
-  void should_send_audio_language_and_text_format_when_transcribing() {
+  void should_send_audio_language_and_base_prompt_without_vocabulary_when_transcribing() {
     whisper.stubFor(post(urlPathEqualTo("/inference")).willReturn(ok("salom")));
 
     speechToText.transcribe(AUDIO, HINTS);
@@ -87,9 +85,7 @@ class WhisperCppSpeechToTextIntegrationTest {
                     .withBody(binaryEqualTo(new byte[] {1, 2, 3})))
             .withAnyRequestBodyPart(aMultipart("language").withBody(equalTo("uz")))
             .withAnyRequestBodyPart(aMultipart("response_format").withBody(equalTo("text")))
-            .withAnyRequestBodyPart(
-                aMultipart("prompt")
-                    .withBody(equalTo("Lotin yozuvida. ELT imzo, kassa bo'limi."))));
+            .withAnyRequestBodyPart(aMultipart("prompt").withBody(equalTo("Lotin yozuvida."))));
   }
 
   @Test

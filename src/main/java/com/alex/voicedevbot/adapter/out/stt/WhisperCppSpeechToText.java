@@ -43,7 +43,7 @@ public class WhisperCppSpeechToText implements SpeechToText {
 
   @Override
   public Transcription transcribe(AudioClip audio, TranscriptionHints hints) {
-    String prompt = WhisperPrompt.build(hints, settings.basePrompts());
+    String prompt = WhisperPrompt.build(hints.language(), settings.basePrompts());
     try {
       return new Transcription(
           new Transcript(requestTranscript(audio, hints.language().code(), prompt)),

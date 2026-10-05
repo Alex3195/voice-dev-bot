@@ -192,7 +192,9 @@ matn) 36,6%, hozirgi `large-v3-q5_0` hozirgi lug'at bilan qayta — 66,0%. Topil
       server `WHISPER_MODEL=ggml-large-v3.bin WHISPER_PORT=8179 scripts/whisper-dev.sh`), natija — #19 izohida.
 - [ ] Botda `✏️ Tuzatilgan matnni tahrirlash` — foydalanuvchi `confirmed_text`ni qo'lda to'g'rilaydi; 10 ta
       atrofida inson tekshirgan "oltin" yozuv. Yana 8–12 audio, imkon bo'lsa boshqa ovoz (2000+ so'z).
-- [ ] Lug'at prompt'ga qanday ta'sir qilishini o'lchash (lug'atli / lug'atsiz) — takrorlanib qolish sababi.
+- [x] Lug'at prompt'ga ta'siri: 12,7 s audioda lug'atli prompt bilan Whisper aytilgan gap o'rniga lug'atni 7 marta
+      takrorladi (temperature 0.2 ham yordam bermadi), lug'atsiz — gap chiqdi. Lug'at Whisper prompt'idan olib
+      tashlandi; lug'atdan qanday foydalanish (Claude tuzatishida, `💡` takliflar) — alohida ko'rib chiqiladi.
 - [ ] Tijoriy STT (kalit va xarajat — ruxsat bilan), keyin qaror.
 
 ### D2 — Spetsifikatsiya

@@ -35,7 +35,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 ## Multi-project dizayn
 - Projectlar bot bazasida (PostgreSQL): `/addproject`, `/project`. Har project bitta **GitLab yoki GitHub repo**'ga bog'lanadi (mavjudini tanlash, havola bilan ulash yoki yangisini yaratish).
 - Ulanishlar bot ichida (`⚙️ → 🔗 Ulanishlar`) boshqariladi: GitLab (gitlab.com yoki self-hosted), GitHub (github.com), keyin Jira — `{provider, base_url, token}`; bitta token shu serverdagi barcha projectlar uchun, tekshiriladi, tugash sanasi kuzatiladi va yangilanadi.
-- Har projectning **atamalar lug'ati** bazada (`/glossary`), `.env`da emas. Faol project lug'ati Whisper prompt'iga qo'shiladi; `TaskParser` esa barcha projectlar lug'atini ko'radi va projectni o'zi aniqlaydi.
+- Har projectning **atamalar lug'ati** bazada (`/glossary`), `.env`da emas. Lug'at Whisper prompt'iga **qo'shilmaydi** (Whisper uni takrorlab, aytilgan gapni yo'qotadi — 2026-10-05 sinovi); `TaskParser` esa barcha projectlar lug'atini ko'radi va projectni o'zi aniqlaydi.
 - `/project` buyrug'i yoki ovozda project nomi aytilsa LLM ajratadi; topolmasa so'raydi.
 - Har foydalanuvchining nutq tili (`/lang`): Whisper'da qoraqalpoq tili yo'q, bunday foydalanuvchilar uchun `kk` eng yaqini.
 - Qoidalar bot kodida emas, **har project repo'sida**:
@@ -56,7 +56,7 @@ Bir nechta project (har xil tilda) bilan ishlaydi; har project o'z qoidalarini o
 - CI uchun til bo'yicha reusable workflow shablonlari (java, node, flutter) markaziy repo'da.
 
 ## Infratuzilma qarorlari
-- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda lotin yozuvidagi namuna prompt (usiz matn kirill/turkcha imloga o'tib ketadi). Project atamalari lug'ati `.env`da emas — har project uchun bazada (`/glossary`), faol project lug'ati prompt'ga qo'shiladi. Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
+- STT dvigateli: **whisper.cpp `whisper-server`** (HTTP `/inference`, `--convert` bilan OGG/Opus qabul qiladi), ggml model `large-v3-q5_0` (turbo o'zbekchada zaif), `--beam-size 5`, `language=uz`, har so'rovda lotin yozuvidagi namuna prompt (usiz matn kirill/turkcha imloga o'tib ketadi). Project atamalari lug'ati `.env`da emas — har project uchun bazada (`/glossary`), Whisper prompt'ida faqat til namunasi bo'ladi, lug'at yo'q. Bot unga `WhisperCppSpeechToText` orqali HTTP bilan ulanadi.
 - Server: uy kompyuterida (Windows, RTX 3060 8 GB) Docker'da — `docker compose --profile gpu up -d` (`compose.yaml`, rasmiy `whisper.cpp:main-cuda` image). Model bir marta yuklanadi.
 - Dev (Mac): native `whisper-server` (Metal GPU, Docker'dan ~70x tez) — `scripts/whisper-dev.sh`. Rasmiy image arm64 uchun yo'q.
 - Dev va server farqi faqat bitta sozlama: `STT_WHISPER_URL`.
