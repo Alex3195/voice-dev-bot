@@ -12,8 +12,8 @@ To'liq g'oya va bosqichlar: [CLAUDE.md](CLAUDE.md).
 - Uzun matn 4096 belgilik bir nechta xabarga bo'linadi. Audio'lar navbat bilan qayta ishlanadi.
 - Audio Telegram'dan yuklanadi va whisper.cpp server orqali matnga aylantiriladi.
 - Bot natija matnini qaytaradi.
-- Projectlar va atamalar lug'ati (PostgreSQL): faol project lug'ati Whisper'ga beriladi — xususiy nomlar
-  (ELT imzo, Klaes, PVX) to'g'ri yoziladi.
+- Projectlar va atamalar lug'ati (PostgreSQL): Whisper'ga berilmaydi (u lug'atni
+  takrorlab yozib qo'yadi); xususiy nomlarni (ELT imzo, Klaes, PVX) Claude tuzatilgan matnda to'g'rilaydi.
 - Har foydalanuvchining nutq tili (`/lang`): masalan, qoraqalpoqcha gapiradigan uchun `kk`.
 
 ### Boshqaruv — tugmalar bilan

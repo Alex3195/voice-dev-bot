@@ -1,37 +1,21 @@
 package com.alex.voicedevbot.adapter.out.stt;
 
-import com.alex.voicedevbot.domain.TranscriptionHints;
-import java.util.ArrayList;
-import java.util.List;
+import com.alex.voicedevbot.domain.SpeechLanguage;
 import java.util.Map;
 
 /**
- * Whisper'ning boshlang'ich prompt'i: til namunasi + project atamalari.
+ * Whisper'ning boshlang'ich prompt'i — faqat til namunasi (usiz matn kirill/turkcha imloga o'tib
+ * ketadi).
  *
- * <p>Whisper prompt'ning faqat oxirgi ~224 tokenini ishlatadi; o'zbekcha matnda bu taxminan 600
- * belgi. Sig'maydigan atamalar tashlab yuboriladi (lug'at boshidagilar ustun).
+ * <p>Project lug'ati bu yerga qo'shilmaydi: qisqa yoki notanish talaffuzdagi audioda Whisper
+ * prompt'ni "oldingi gap" deb davom ettiradi va aytilgan gap o'rniga lug'at so'zlarini takrorlab
+ * yozadi. Atamalarni Claude tuzatilgan matnda to'g'rilaydi.
  */
 final class WhisperPrompt {
 
-  static final int MAX_LENGTH = 600;
-
   private WhisperPrompt() {}
 
-  static String build(TranscriptionHints hints, Map<String, String> basePrompts) {
-    String base = basePrompts.getOrDefault(hints.language().code(), "").strip();
-    List<String> fitting = new ArrayList<>();
-    int length = base.length() + 1;
-    for (String term : hints.vocabulary()) {
-      length += term.length() + 2;
-      if (length > MAX_LENGTH) {
-        break;
-      }
-      fitting.add(term);
-    }
-    if (fitting.isEmpty()) {
-      return base;
-    }
-    String terms = String.join(", ", fitting) + ".";
-    return base.isEmpty() ? terms : base + " " + terms;
+  static String build(SpeechLanguage language, Map<String, String> basePrompts) {
+    return basePrompts.getOrDefault(language.code(), "").strip();
   }
 }
