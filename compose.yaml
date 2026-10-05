@@ -1,7 +1,8 @@
 # Bot infratuzilmasi: PostgreSQL (har doim) + whisper.cpp STT server (profil bilan).
 #
 #   docker compose up -d postgres         # dev: faqat baza (Whisper — native, scripts/whisper-dev.sh)
-#   docker compose --profile gpu up -d    # server: Windows + NVIDIA (RTX 3060) — baza + Whisper
+#   docker compose --profile gpu up -d    # server: Windows + NVIDIA (RTX 3050) — baza + Whisper
+#   docker compose --profile gpu up -d whisper-gpu   # faqat Whisper (baza boshqa mashinada)
 #   docker compose --profile cpu up -d    # GPU'siz mashina (Apple Silicon'da amd64 emulyatsiya — sekin)
 #
 # Whisper profillari bir xil API va portni beradi, bot uchun faqat STT_WHISPER_URL farq qiladi.
@@ -51,7 +52,9 @@ services:
 
   whisper-gpu:
     <<: *whisper
-    image: ghcr.io/ggml-org/whisper.cpp:main-cuda
+    # Rasmiy main-cuda AVX-512 bilan yig'ilgan — AVX2'li CPU'da SIGILL (exit 132). O'zimiz yig'amiz.
+    image: voice-dev-bot/whisper-cuda
+    build: docker/whisper-cuda
     profiles: [gpu]
     deploy:
       resources:
